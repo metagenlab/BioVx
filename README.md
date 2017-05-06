@@ -4,12 +4,13 @@ Some of the original programs have been upgraded and new programs have been adde
 
 This is the list of programs available:  
 
-protocol1.py  
-protocol2.py  
-gsat.py  
-gblast3.py  
-ancient.py  
-quod.py  
-hvordan.py  
-tmsplit.py  
-
+<ul>
+  <li>protocol1.py</li>  
+  <li>protocol2.py</li>  
+  <li>gsat.py</li>  
+  <li>gblast3.py</li>  
+  <li>ancient.py</li>  
+  <li>quod.py</li>  
+  <li>hvordan.py</li>  
+  <li>tmsplit.py</li>  
+</ul>
