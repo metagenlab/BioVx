@@ -1,4 +1,4 @@
-# Welcome to the Extended repository of the BioV suite of programs
+# Welcome to the repository of the Extended BioV suite of programs
 
 Most of the original programs in the suite were originally written by Vamsee Reddy, many have been updated and new programs have been added by different members of the lab and collaborators.
 
