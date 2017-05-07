@@ -33,15 +33,5 @@ http://biotools.tcdb.org/bartms_split.html
 The program gblast3.py was modified by Pranav Iddamsetty and Arturo Medrano to generate a tabulated file (results.tsv) with the same output as results.html. This will allow further automatic processing of gblast output (e.g. compare different outputs of gblast to identify commonalities/differences between trasporter systems in different genomes). This program was also modified to add annotated substrates in tcdb to the output. Currently the substrates are read from flat files but as soon as the substrates are uploaded to TCDB we will modify the script to read the substrates directly from the database.  
 
 * **Note 5:**  
-The programs quod.py, tcblast.py and hvordan.py were  
-added by Kevin Hendargo and Arturo Medrano. The script  
-quod.py runs WHAT from the command line on one or more  
-sequences and is able to generate the plots in different  
-formats and qualities. The script tcblast.py provides  
-functions to run blast against tcdb from the command  
-line and provides graphical display that will be used  
-by the last script hvordan.py, which runs blast and WHAT  
-in order to generated an html ouput file that will help  
-the user to make the biological interpretation of  
-protocol2 top hits.  
+The programs quod.py, tcblast.py and hvordan.py were added by Kevin Hendargo and Arturo Medrano. The script quod.py runs WHAT from the command line on one or more sequences and is able to generate the plots in different formats and qualities. The script tcblast.py provides functions to run blast against tcdb from the command line and provides graphical display that will be used by the last script hvordan.py, which runs blast and WHAT in order to generated an html ouput file that will help the user to make the biological interpretation of protocol2 top hits.  
 
