@@ -4,7 +4,7 @@ Some modifications by Gabriel Moreno-Hagelsieb
 Note 1:
    Pranav Iddamsetty and Arturo Medrano
    added the scripts tmsplit and tmsFunction.py.
-   This programs provide a command-line interface
+   These programs provide a command-line interface
    to cut transporter sequences under the same 
    criteria as the website:
 
