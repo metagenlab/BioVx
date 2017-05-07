@@ -4,14 +4,14 @@ Most of the original programs in the suite were originally written by Vamsee Red
 
 Find below the list of programs available. Scripts developed by our group as dependencies are not listed here but are included in the distribution:  
 
-**1.** protocol1.py 
-**2.** protocol2.py
-**3.** gsat.py 
-**4.** gblast3.py 
-**5.** ancient.py 
-**6.** quod.py 
-**7.** hvordan.py
-**8.** msplit.py
+**1.** protocol1.py   
+**2.** protocol2.py  
+**3.** gsat.py   
+**4.** gblast3.py   
+**5.** ancient.py   
+**6.** quod.py   
+**7.** hvordan.py  
+**8.** msplit.py  
 
 ---  
 
@@ -30,20 +30,7 @@ under the same criteria as the website:
 http://biotools.tcdb.org/bartms_split.html  
 
 * **Note 4:**  
-The program gblast3.py was modified by  
-Pranav Iddamsetty and Arturo Medrano to  
-generate a tabulated file (results.tsv) with  
-the same output as results.html. This will  
-allow further automatic processing of gblast  
-output (e.g. compare different outputs of gblast  
-to identify commonalities/differences between  
-trasporter systems in different genomes).   
-This program was also modified to add annotated  
-substrates in tcdb to the output. Currently the  
-substrates are read from flat files but as soon  
-as the substrates are uploaded to TCDB we will  
-modify the script to read the substrates directly  
-from the database.  
+The program gblast3.py was modified by Pranav Iddamsetty and Arturo Medrano to generate a tabulated file (results.tsv) with the same output as results.html. This will allow further automatic processing of gblast output (e.g. compare different outputs of gblast to identify commonalities/differences between trasporter systems in different genomes). This program was also modified to add annotated substrates in tcdb to the output. Currently the substrates are read from flat files but as soon as the substrates are uploaded to TCDB we will modify the script to read the substrates directly from the database.  
 
 * **Note 5:**  
 The programs quod.py, tcblast.py and hvordan.py were  
