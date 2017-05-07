@@ -1,6 +1,6 @@
 # Welcome to the Extended repository of the BioV suite of programs
 
-Some of the original programs in the suite have been updated and new programs have been added by diffrent members of the lab and collaborators.
+Some of the original programs in the suite have been updated and new programs have been added by different members of the lab and collaborators.
 
 Find below the list of programs available. Scripts developed by our group as dependencies are not listed here but are included in the distribution:  
 
