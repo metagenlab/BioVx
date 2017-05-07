@@ -18,31 +18,29 @@ Find below the list of programs available. Scripts developed by our group as dep
 ---  
 
 **Note 1:**  
-
-&nbsp;&nbsp;The manual is not updated so far.  
+> The manual is not updated so far.  
 
 **Note 2:**  
-&nbsp;&nbsp;Some modifications to protocol 2 and other programs    
-&nbsp;&nbsp;by Gabriel Moreno-Hagelsieb.   
+> Some modifications to protocol 2 and other programs by Gabriel Moreno-Hagelsieb.   
 
 **Note 3:**  
-  Pranav Iddamsetty and Arturo Medrano  
-  added the scripts tmsplit and tmsFunction.py.  
-  These programs provide a command-line interface  
-  to cut transporter sequences under the same   
-  criteria as the website:  
+&nbsp;&nbsp;&nbsp;Pranav Iddamsetty and Arturo Medrano  
+&nbsp;&nbsp;&nbsp;added the scripts tmsplit and tmsFunction.py.  
+&nbsp;&nbsp;&nbsp;These programs provide a command-line interface  
+&nbsp;&nbsp;&nbsp;to cut transporter sequences under the same   
+&nbsp;&nbsp;&nbsp;criteria as the website:  
 
-  http://biotools.tcdb.org/bartms_split.html  
+&nbsp;&nbsp;&nbsp;http://biotools.tcdb.org/bartms_split.html  
 
 **Note 4:**  
-  The program gblast3.py was modified by  
-  Pranav Iddamsetty and Arturo Medrano to  
-  generate a tabulated file (results.tsv) with  
-  the same output as results.html. This will  
-  allow further automatic processing of gblast  
-  output (e.g. compare different outputs of gblast  
-  to identify commonalities/differences between  
-  trasporter systems in different genomes).   
+&nbsp;&nbsp;&nbsp;The program gblast3.py was modified by  
+&nbsp;&nbsp;&nbsp;Pranav Iddamsetty and Arturo Medrano to  
+&nbsp;&nbsp;&nbsp;generate a tabulated file (results.tsv) with  
+&nbsp;&nbsp;&nbsp;the same output as results.html. This will  
+&nbsp;&nbsp;&nbsp;allow further automatic processing of gblast  
+&nbsp;&nbsp;&nbsp;output (e.g. compare different outputs of gblast  
+&nbsp;&nbsp;&nbsp;to identify commonalities/differences between  
+&nbsp;&nbsp;&nbsp;trasporter systems in different genomes).   
   This program was also modified to add annotated  
   substrates in tcdb to the output. Currently the  
   substrates are read from flat files but as soon  
