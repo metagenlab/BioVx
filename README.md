@@ -1,8 +1,8 @@
 # Welcome to the Extended repository of the BioV suite of programs
 
-Some of the original programs have been upgraded and new programs have been added by diffrent members of the lab.
+Some of the original programs in the suite have been updated and new programs have been added by diffrent members of the lab and collaborators.
 
-This is the list of programs available:  
+Find below the list of programs available. Scripts developed by our group as dependencies are not listed here but are included in the distribution:  
 
 <ul>
   <li>protocol1.py</li>  
