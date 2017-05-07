@@ -50,7 +50,7 @@ and is able to generate the plots in different formats and
 qualities. The script _tcblast.py_ provides functions to run 
 blast against tcdb from the command line and provides 
 graphical display that will be used by the last script 
-hvordan.py, which runs blast and WHAT in order to generated 
+_hvordan.py_, which runs blast and WHAT in order to generated 
 an html ouput file that will help the user to make the 
 biological interpretation of protocol2 top hits.  
 
