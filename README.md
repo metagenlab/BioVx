@@ -16,7 +16,7 @@ Find below the list of programs available. Scripts developed by our group as dep
 ---  
 
 * **Note 1:**  
-The manual needs to be updated.  
+The BioV manual needs to be updated.  
 
 * **Note 2:**  
 Some modifications to protocol 2 and other programs
