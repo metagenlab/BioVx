@@ -9,9 +9,9 @@ Find below the list of programs available. Scripts developed by our group as dep
 **3.** gsat.py       ([Manual](manuals/BioV_manual.pdf))  
 **4.** gblast3.py    ([Manual](manuals/BioV_manual.pdf))    
 **5.** tmstats.py    ([Manual](manuals/BioV_manual.pdf))  
-**6.** tss.py        ([Manual](manuals/BioV_manual.pdf)) 
-**7.** ssearch.py    ([Manual](manuals/BioV_manual.pdf)) 
-**8.** ancient.py    ([Manual](manuals/AR_INSTRUCTIONS.pdf))  
+**6.** tss.py        ([Manual](manuals/BioV_manual.pdf))  
+**7.** ssearch.py    ([Manual](manuals/BioV_manual.pdf))  
+**8.** ancient.py    ([Manual](manuals/AR_INSTRUCTIONS.pdf))   
 **9.** quod.py       ([Manual](https://github.com/khendarg/hvordan/blob/master/docs/quod.md))  
 **10.** hvordan.py   ([Manual](https://github.com/khendarg/hvordan/blob/master/docs/hvordan.md))  
 **11.** tmsplit.py  
