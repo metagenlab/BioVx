@@ -9,8 +9,8 @@ Find below the list of programs available. Scripts developed by our group as dep
 **3.** gsat.py   
 **4.** gblast3.py   
 **5.** ancient.py   
-**6.** quod.py     ([Manual](https://github.com/khendarg/hvordan/blob/master/docs/quod.md)  
-**7.** hvordan.py  ([Manual](https://github.com/khendarg/hvordan/blob/master/docs/hvordan.md)  
+**6.** quod.py     ([Manual](https://github.com/khendarg/hvordan/blob/master/docs/quod.md))  
+**7.** hvordan.py  ([Manual](https://github.com/khendarg/hvordan/blob/master/docs/hvordan.md))  
 **8.** msplit.py  
 
 ---  
