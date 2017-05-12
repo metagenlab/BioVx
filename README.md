@@ -4,19 +4,19 @@ Most of the original programs in the suite were originally written by Vamsee Red
 
 Find below the list of programs available. Scripts developed by our group as dependencies are not listed here but are included in the distribution:  
 
-**1.** protocol1.py   
-**2.** protocol2.py  
-**3.** gsat.py   
-**4.** gblast3.py   
-**5.** ancient.py   
-**6.** quod.py     ([Manual](https://github.com/khendarg/hvordan/blob/master/docs/quod.md))  
-**7.** hvordan.py  ([Manual](https://github.com/khendarg/hvordan/blob/master/docs/hvordan.md))  
+**1.** protocol1.py  ([Manual](manuals/BioV_manual.pdf))  
+**2.** protocol2.py  ([Manual](manuals/BioV_manual.pdf))  
+**3.** gsat.py       ([Manual](manuals/BioV_manual.pdf))  
+**4.** gblast3.py    ([Manual](manuals/BioV_manual.pdf))    
+**5.** ancient.py    ([Manual](manuals/AR_INSTRUCTIONS.pdf))  
+**6.** quod.py       ([Manual](https://github.com/khendarg/hvordan/blob/master/docs/quod.md))  
+**7.** hvordan.py    ([Manual](https://github.com/khendarg/hvordan/blob/master/docs/hvordan.md))  
 **8.** tmsplit.py  
 
 ---  
 
 * **Note 1:**  
-The manual is not updated so far.  
+The manual needs to be updated.  
 
 * **Note 2:**  
 Some modifications to protocol 2 and other programs
