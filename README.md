@@ -1,6 +1,6 @@
 # Welcome to the repository of the Extended BioV suite of programs
 
-Most of the original programs in the suite were originally written by Vamsee Reddy, many have been updated and new programs have been added by different members of the lab and collaborators.
+The original programs in the suite were originally written by Vamsee Reddy, many have been updated and new programs have been added by different members of the lab and collaborators.
 
 Find below the list of programs available. Scripts developed by our group as dependencies are not listed here but are included in the distribution:  
 
