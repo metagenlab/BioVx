@@ -1,9 +1,10 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-import subprocess, tempfile, os
+import subprocess, tempfile, os, sys
 import numpy as np
 
 import re
@@ -11,14 +12,15 @@ import re
 import warnings
 warnings.filterwarnings("ignore")
 
-def blast(seq):
+
+def blast(seq, maxhits=50):
 	f = tempfile.NamedTemporaryFile(delete=False)
 	f.write(seq.encode('utf-8'))
 	f.close()
 	try:
-		cmd = ['blastp', '-db', 'tcdb', '-evalue', '1.0', '-query', f.name, '-gapopen', '11', '-gapextend', '1', '-matrix', 'BLOSUM62', '-comp_based_stats', '0', '-seg', 'no', '-num_alignments', '50']
-		tabout = subprocess.check_output(cmd + ['-outfmt', '6'])
-		pairwise = subprocess.check_output(cmd + ['-outfmt', '0', '-num_descriptions', '50'])
+		cmd = ['blastp', '-db', 'tcdb', '-evalue', '1.0', '-query', f.name, '-gapopen', '11', '-gapextend', '1', '-matrix', 'BLOSUM62', '-comp_based_stats', '0', '-seg', 'no']
+		tabout = subprocess.check_output(cmd + ['-outfmt', '6', '-max_target_seqs', str(maxhits)])
+		pairwise = subprocess.check_output(cmd + ['-outfmt', '0', '-num_descriptions', str(maxhits), '-num_alignments', str(maxhits)])
 	finally: os.remove(f.name)
 
 	return tabout.decode('utf-8'), pairwise.decode('utf-8')
@@ -43,13 +45,9 @@ def hmmtop(seq, outdir=None, silent=False):
 		f.close()
 		return x
 
-	f = tempfile.NamedTemporaryFile(delete=False)
-	f.write(seq.encode('utf-8'))
-	f.close()
-	try: 
-		if not silent: topout = subprocess.check_output(['hmmtop', '-if=%s' % f.name, '-sf=FAS', '-pi=spred', '-is=pseudo'])
-		else: topout = subprocess.check_output(['hmmtop', '-if=%s' % f.name, '-sf=FAS', '-pi=spred', '-is=pseudo'], stderr=open(os.devnull, 'w'))
-	finally: os.remove(f.name)
+	f = subprocess.Popen(['hmmtop', '-if=--', '-sf=FAS', '-pi=spred', '-is=pseudo'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	topout, err = f.communicate(input=seq)
+	print(err.strip(), file=sys.stderr)
 
 	if outdir:
 		f = open(fn, 'w')
@@ -62,23 +60,26 @@ def parse_hmmtop(topout):
 	skip = 0
 	found = 0
 	indices = []
-	for i, x in enumerate(topout.split()): 
-		if skip:
-			skip += 1
-			continue
-		if x in ('IN', 'OUT'): 
-			try: int(topout.split()[i+1])
-			except ValueError: continue
-			if int(topout.split()[i+1]): 
-				indices = topout.split()[i+2:]
-				break
+
+	#indices = re.findall('(?:\s+([0-9]+))\s*$', topout)
+	indices = re.findall('((?:[0-9]+\s+)+)$', topout)[0].strip().split()[1:]
+
+	#for i, x in enumerate(topout.split()): 
+	#	if skip:
+	#		skip += 1
+	#		continue
+	#	if x in ('IN', 'OUT'): 
+	#		try: int(topout.split()[i+1])
+	#		except ValueError: continue
+	#		if int(topout.split()[i+1]): 
+	#			indices = topout.split()[i+2:]
+	#			break
 	tmss = []
 	for i in range(0, len(indices), 2): 
 		tmss.append([int(indices[i]), int(indices[i+1])-int(indices[i])])
 	return tmss
 
-
-def plot_tab(tab, top, filename, maxaln=50, dpi=100, imgfmt='png', overwrite=False):
+def plot_tab(tab, top, filename, maxaln=50, dpi=100, imgfmt='png', overwrite=False, silent=False):
 	bars = {}
 	targets = []
 	maxlen = 0
@@ -123,8 +124,9 @@ def plot_tab(tab, top, filename, maxaln=50, dpi=100, imgfmt='png', overwrite=Fal
 
 	covheight = len(targets)/12.0*2
 	topheight = 0.25
+	bottomheight = 1.0
 	
-	plt.figure(figsize=(8, covheight+topheight), tight_layout=1, dpi=dpi)
+	plt.figure(figsize=(8, covheight+topheight+bottomheight), tight_layout=1, dpi=dpi)
 	#gs = gridspec.GridSpec(2, 1, height_ratios=[topheight, covheight])
 	gs = gridspec.GridSpec(1, 1)
 	ax1 = plt.subplot(gs[0])
@@ -133,9 +135,8 @@ def plot_tab(tab, top, filename, maxaln=50, dpi=100, imgfmt='png', overwrite=Fal
 
 	yoff = 3
 	for i, t in enumerate(targets): 
-		#print(repr(-i), repr(1*.7))
-		ax1.broken_barh(bars[t], [-i-yoff, 1*0.7])
-		plt.annotate(t, [mini[t], -i-yoff], color='white', size=8)
+		ax1.broken_barh(bars[t], [-i-yoff, 1*0.8])
+		plt.annotate(t, [mini[t], -i-yoff+0.1], color='white', size=8)
 		if t == evalue:
 			#draw the 0.05 cutoff line
 			#maybe spread the word that the red line is a 0.05 cutoff line?
@@ -143,6 +144,7 @@ def plot_tab(tab, top, filename, maxaln=50, dpi=100, imgfmt='png', overwrite=Fal
 		#help(plt.annotate)
 	plt.xlim(left=0, right=maxlen)
 	plt.ylim(top=2, bottom=-i-1-yoff)
+	#plt.ylim(top=2, bottom=-i-1-yoff)
 
 	#ax1 = plt.subplot(gs[0], sharex=ax1)
 	#ax1.axes.get_xaxis().set_visible(0)
@@ -159,11 +161,10 @@ def plot_tab(tab, top, filename, maxaln=50, dpi=100, imgfmt='png', overwrite=Fal
 
 	plt.savefig(filename, format=imgfmt, dpi=dpi, bbox_inches='tight')
 
-#plot_tab(tab1, top1, 'html/tab1.png', dpi=300)
 
 #OPTIMIZE ME: only parse once instead of every time
 
-def summary(tab, html=False, outdir=None, prefix=''):
+def summary(tab, html=False, outdir=None, prefix='', seqbank={}, tmcount={}, silent=False):
 	out = ''
 	if html == 1: out += '<pre>'
 	#elif html == 2: out += '<table style="font-family: monospace, courier; font-size: 75%">'
@@ -174,9 +175,13 @@ def summary(tab, html=False, outdir=None, prefix=''):
 		if not l.strip(): continue
 		hit = l.split()[1]
 		#if 'TC-DB' in hit: hit = hit.split('|')[3] + '-' + hit.split('|')[2]
-		seq = subprocess.check_output(['blastdbcmd', '-db', 'tcdb', '-target_only','-entry', hit]).decode('utf-8')
-		tmss = parse_hmmtop(hmmtop(seq, outdir=outdir, silent=True))
-		ntmss = len(tmss)
+		try: seq = seqbank[hit]
+		except KeyError:
+			seq = seqbank[hit] = subprocess.check_output(['blastdbcmd', '-db', 'tcdb', '-target_only','-entry', hit]).decode('utf-8')
+		try: ntmss = tmcount[hit]
+		except KeyError:
+			tmss = parse_hmmtop(hmmtop(seq, outdir=outdir, silent=silent))
+			ntmss = tmcount[hit] = len(tmss)
 
 		tcid, acc = tuple(hit.split('-'))
 
@@ -200,9 +205,9 @@ def summary(tab, html=False, outdir=None, prefix=''):
 
 		#COLUMN 2: TMSs
 		if html < 2: out += '\t'
-		if html >= 2: out += '<td>'
+		if html >= 2: out += '<td><a href="../blasts/%s_%s.top">' % (tcid, acc)
 		out += '%d TMSs' % ntmss
-		if html >= 2: out += '</td>'
+		if html >= 2: out += '</a></td>'
 
 		#COLUMN 3: TCID
 		if html < 2: out += '\t'
@@ -301,12 +306,12 @@ def fmt_pairw(tab, pairw, html=0, prefix=''):
 	#return pairw
 	return out
 
-def til_warum(seq, outfile, title='Unnamed', dpi=100, html=2, outdir=None):
+def til_warum(seq, outfile, title='Unnamed', dpi=100, html=2, outdir=None, clobber=False, seqbank={}, tmcount={}, silent=False, maxhits=50):
 
-	tab, pairw = blast(seq)
+	tab, pairw = blast(seq, maxhits=maxhits)
 
-	top = hmmtop(seq, outdir=outdir)
-	plot_tab(tab, top, outfile, dpi=dpi)
+	if not clobber and os.path.isfile(outfile):  pass
+	else: plot_tab(tab, hmmtop(seq, outdir=outdir), outfile, dpi=dpi, overwrite=clobber, silent=silent)
 
 	if not outfile.startswith('/'): relative = outfile[outfile.find('/')+1:]
 	else: relative = outfile
@@ -318,7 +323,8 @@ def til_warum(seq, outfile, title='Unnamed', dpi=100, html=2, outdir=None):
 	#out += '<html><head><title>%s</title><link href="nice.css" type="text/css" rel="stylesheet"/></head><body>' % title
 	outi = ''
 	out += '<hr/>'
-	out += summary(tab, html=html, outdir=outdir, prefix=title)
+
+	out += summary(tab, html=html, outdir=outdir, prefix=title, tmcount=tmcount)
 	out += '<hr/>'
 
 	out += '<pre>'
@@ -331,5 +337,3 @@ def til_warum(seq, outfile, title='Unnamed', dpi=100, html=2, outdir=None):
 	return outi, out
 
 if __name__ == '__main__': print('### UI NOT IMPLEMENTED, BUG KEVIN ###')
-
-#print(til_warum('>gnl|TC-DB|373567223|9.B.143.4.7 protein of unknown function DUF1275 [Methylobacterium extorquens DSM 13060]\nMSDEPVFRPRTRLPFEERLNDRADPVTRPWQIGFGVVLTALAGFVDALGFIRLGGLYTSL\nMSGNTTQLAVALGHGEPLGAVLPALLIGAFLVGAVSGGAIAALCPPRWVTPAVLGLEAVA\nLTAAVALAAEHAHVGVASLFLALAMGGQNAVLAHVQGFRAGTTFVTGALFAFGQKAALAL\nAGRGPRLGWVGDGSVWLSLLVGAVAGTLAHAHLGIAALAIPAVVAAGLCLAATLFTLVYR\nRAPVTLTKI', 'deleteme.png', title='9.B.143.4.7 protein of unknown function DUF1275 [Methylobacterium extorquens DSM 13060]'))
