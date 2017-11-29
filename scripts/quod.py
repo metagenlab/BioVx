@@ -16,6 +16,31 @@ import numpy as np
 
 VERBOSITY = 0
 
+class Wedge(object):
+	def __init__(self, x, dx=0, y=0):
+		self.x = x
+		self.dx = dx
+		self.y = y
+	def draw(self, plt):
+		(plt.xlim(), plt.ylim())
+		if self.y > 0: ymin, ymax = 0.5, 1
+		elif self.y < 0: ymin, ymax = 0, 0.5
+		else: ymin, ymax = 0, 1
+		x = max(plt.xlim()[0], min(plt.xlim()[1], self.x))
+		plt.axvline(x=x, color='black', ymin=ymin, ymax=ymax)
+
+		if self.dx:
+			x = x + abs(self.dx)**.5 * (self.dx)/abs(self.dx)
+			#if self.dx < 0: 
+			if self.y == 0: y = 2
+			else: y = self.y
+
+			size = abs(self.dx)
+
+			if self.dx < 0: marker = '<'
+			else: marker = '>'
+
+			plt.scatter((x,), (y,), marker=marker, color='black', s=25*size)
 
 def hydro(gseq, window=19):
 	#Copied with barely any modification from gblast3.py
@@ -174,7 +199,7 @@ def tms_color(n):
 		elif r == 2: return 'darkgreen'
 	else: return n
 
-def what(sequences, labels=None, imgfmt='png', directory=None, filename=None, title=False, dpi=80, hide=True, viewer=None, bars=[], color='auto', offset=0, statistics=False, overwrite=False, manual_tms=None, wedges=None, ywedge=2, legend=False, window=19, silent=False, axisfont=None, tickfont=None, xticks=None, mode='hydropathy'):
+def what(sequences, labels=None, imgfmt='png', directory=None, filename=None, title=False, dpi=80, hide=True, viewer=None, bars=[], color='auto', offset=0, statistics=False, overwrite=False, manual_tms=None, wedges=[], ywedge=2, legend=False, window=19, silent=False, axisfont=None, tickfont=None, xticks=None, mode='hydropathy'):
 	#wedges: [(x1, dx1), (x2, dx2), ...]
 
 	try: color = int(color)
@@ -279,17 +304,18 @@ def what(sequences, labels=None, imgfmt='png', directory=None, filename=None, ti
 		#Mostly, I don't quite know how self.queryhmg or self.tcdbhmg return their results
 		#for tms in top[i]: plt.axvspan(tms[0], tms[1], facecolor=color(i, color), alpha=0.6/len(hydropathies))
 
-	if bars:
-		for x in bars: plt.axvline(x=x, color='black')
-	if wedges:
-		for wedge in wedges:
-			wedge[0] += abs(wedge[1])**.5 * (wedge[1])/abs(wedge[1])
-			if wedge[1] < 0: 
-				wedge[1] *= -1
-				marker = '<'
-			else:
-				marker = '>'
-			plt.scatter((wedge[0],), (ywedge,), marker=marker, color='black', s=25*wedge[1])
+	#if bars:
+	#	for x in bars: plt.axvline(x=x, color='red', ymin=0.5, ymax=1)
+	#if wedges:
+	#	for wedge in wedges:
+	#		wedge[0] += abs(wedge[1])**.5 * (wedge[1])/abs(wedge[1])
+	#		if wedge[1] < 0: 
+	#			wedge[1] *= -1
+	#			marker = '<'
+	#		else:
+	#			marker = '>'
+	#		plt.scatter((wedge[0],), (ywedge,), marker=marker, color='black', s=25*wedge[1])
+	for w in wedges: w.draw(plt)
 	
 	plt.legend().set_visible(legend)
 	#fig = plt.gcf()
@@ -355,12 +381,17 @@ def parse_csranges(colranges):
 			
 
 def parse_wranges(wranges):
-	#assumes wranges is already in ['x,dx', y,dy'] format
+	#assumes wranges is already in ['x1,dx1,y1', x2,dx2,y2'] format
 	if not wranges: return []
 	out = []
 	for wedge in wranges:
-		out.append([float(x) for x in re.split('\s*,\s*', wedge)])
-		if len(out[-1]) < 2: out[-1].append(1)
+		props = [float(x) for x in re.split('\s*,\s*', wedge)]
+
+		x, dx, y = 0, 0, 0
+		if len(props) >= 1: x = props[0]
+		if len(props) >= 2: dx = props[1]
+		if len(props) >= 3: y = props[2]
+		out.append(Wedge(x, dx, y))
 
 	return out
 
@@ -387,7 +418,7 @@ if __name__ == '__main__':
 	parser.add_argument('-m', '--manual-tms', metavar='TMSs', nargs='+', help='Use these comma-separated ranges as TMSs instead of HMMTOP output. Use spaces to separate ranges for other sequences and \'skip\' to skip sequences (i.e. letting HMMTOP assign TMSs. Use colons to specify colors for individual TMSs. Example: -m 1-20:orange paints residues between 1 and 20 inclusive orange. -m 30-50,55-75:cyan paints residues between 30 and 50 inclusive the default color and residues between 55 and 75 inclusive cyan.')
 	#parser.add_argument('-M', '--colored-tms', metavar='TMSs', nargs='+', help='As -m, but use colons to specify colors')
 	parser.add_argument('-w', '--wedges', metavar='wedgex,wedgedx', nargs='+', help='Draw dx-long wedges starting at x. Negative dx values result in left-pointing wedges, and positive dx values result in right-pointing wedges.')
-	parser.add_argument('-W', '--walls', metavar='x,dx', nargs='+', help='Shorthand to specifying both --wedges and --bars for the same x-values. Cumulative with both')
+	parser.add_argument('-W', '--walls', metavar='x(,dx(,y))', nargs='+', help='Shorthand to specifying both --wedges and --bars for the same x-values. Cumulative with both')
 
 	parser.add_argument('--xticks', metavar='interval', type=float, help='Spacing between x ticks')
 	parser.add_argument('--axis-font', metavar='size', type=int, help='Axis label size')
@@ -436,11 +467,20 @@ if __name__ == '__main__':
 	if args.e: mode = 'entropy'
 	else: mode = 'hydropathy'
 
-	wedges, bars = [], []
-	if args.walls: 
-		wedges += parse_wranges(args.walls)
-		bars += [x[0] for x in wedges]
-	if args.wedges: wedges += parse_wranges(args.wedges)
-	if args.bars: bars += [int(x) for x in args.bars]
+	#wedges, bars = [], []
+	#
+	#if args.walls: 
+	#	wedges += parse_wranges(args.walls)
+	#	bars += [x[0] for x in wedges]
+	#if args.wedges: wedges += parse_wranges(args.wedges)
+	#if args.bars: bars += [int(x) for x in args.bars]
 
-	what(sequences, labels=labels, imgfmt=args.t, directory=args.d, filename=args.o, title=args.l, dpi=args.r, hide=args.q, viewer=args.a, overwrite=True, bars=bars, color=args.color, statistics=args.statistics, offset=args.offset, manual_tms=parse_csranges(args.manual_tms), wedges=wedges, xticks=args.xticks, axisfont=args.axis_font, tickfont=args.tick_font, mode=mode)
+	wedges = []
+	if args.walls:
+		wedges += parse_wranges(args.walls)
+	if args.wedges:
+		wedges += parse_wranges(args.wedges)
+	if args.bars:
+		wedges += [Wedge(int(x), 0, 0) for x in args.bars]
+
+	what(sequences, labels=labels, imgfmt=args.t, directory=args.d, filename=args.o, title=args.l, dpi=args.r, hide=args.q, viewer=args.a, overwrite=True, color=args.color, statistics=args.statistics, offset=args.offset, manual_tms=parse_csranges(args.manual_tms), wedges=wedges, xticks=args.xticks, axisfont=args.axis_font, tickfont=args.tick_font, mode=mode)

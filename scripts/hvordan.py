@@ -43,6 +43,7 @@ def fetch(accessions, email=None, db='protein'):
 			except ValueError: raise ValueError
 		return out
 	else:
+		if DEBUG: info('Preparing to fetch non-TCDB sequences')
 		acclist = ''
 		for x in accessions: acclist += ',' + x
 		acclist = acclist[1:]
@@ -58,7 +59,8 @@ def fetch(accessions, email=None, db='protein'):
 				if l.strip(): remotes += '%s,' % l.split()[-1]
 			remotes = remotes[:-1]
 			if DEBUG: info('Fetching from remote')
-			out += subprocess.check_output(['curl', '-d', 'db=%s&id=%s&rettype=fasta&retmode=text' % (db, acclist), 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi'])
+			#out += subprocess.check_output(['curl', '-d', 'db=%s&id=%s&rettype=fasta&retmode=text' % (db, acclist), 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi'])
+			if remotes: out += subprocess.check_output(['curl', '-d', 'db=%s&id=%s&rettype=fasta&retmode=text' % (db, remotes), 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi'])
 			#out += subprocess.check_output(['curl', '-d', 'db=protein&id=Q9RBJ2&rettype=fasta&retmode=text', 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi'])
 
 			return out
@@ -208,19 +210,37 @@ def clean_fetch(accs, outdir, force=False, email=None):
 	#	f.write(fastas[x])
 	#	f.close()
 
-def quod_set(seqids, sequences, indir, outdir, dpi=300, force=False, bars=[], prefix='', suffix='', silent=False):
+def quod_set(seqids, sequences, indir, outdir, dpi=300, force=False, bars=[], prefix='', suffix='', silent=False, pars=[]):
 	if not os.path.isdir(outdir): os.mkdir(outdir)
 
-	wedges = [[[x, 2 * (0.5 - (i % 2))] for i, x in enumerate(span)] for span in bars]
+	#wedges = [[[x, 2 * (0.5 - (i % 2))] for i, x in enumerate(span)] for span in bars]
+
+	ove = lambda x: int(2 * (0.5 - (x % 2)))
+
+	wedges = []
+	for i, span in enumerate(bars):
+		wedges.append([])
+		for j, x in enumerate(span):
+			#wedges.append(quod.Wedge(
+			if 1 <= i <= 2: y = -2
+			else: y = 0
+			wedges[-1].append(quod.Wedge(x=x, dx=ove(j), y=y))
+
+	medges = []
+	for i, span in enumerate(pars):
+		medges.append([])
+		for j, x in enumerate(span):
+			y = 2
+			medges[-1].append(quod.Wedge(x=x, dx=ove(j), y=y))
 
 	#Draw A: barred by B
 	quod.what([sequences[seqids[0]]], title=seqids[0], imgfmt='png', directory=outdir, filename=(seqids[0] + '_' + seqids[1] + '.png'), dpi=dpi, hide=1, bars=bars[0], wedges=wedges[0], silent=silent)
 
 	#Draw B: barred by C
-	quod.what([sequences[seqids[1]]], title=seqids[1], imgfmt='png', directory=outdir, filename=(seqids[1] + '_' + seqids[2] + '.png'), dpi=dpi, hide=1, bars=bars[1], wedges=wedges[1], silent=True)
+	quod.what([sequences[seqids[1]]], title=seqids[1], imgfmt='png', directory=outdir, filename=(seqids[1] + '_' + seqids[2] + '.png'), dpi=dpi, hide=1, bars=bars[1], wedges=wedges[1]+medges[0], silent=True)
 
 	#Draw C: barred by B
-	quod.what([sequences[seqids[2]]], title=seqids[2], imgfmt='png', directory=outdir, filename=(seqids[2] + '_' + seqids[1] + '.png'), dpi=dpi, hide=1, bars=bars[2], color=1, wedges=wedges[2], silent=True)
+	quod.what([sequences[seqids[2]]], title=seqids[2], imgfmt='png', directory=outdir, filename=(seqids[2] + '_' + seqids[1] + '.png'), dpi=dpi, hide=1, bars=bars[2], color=1, wedges=wedges[2]+medges[1], silent=True)
 
 	#Draw D: barred by C
 	quod.what([sequences[seqids[3]]], title=seqids[3], imgfmt='png', directory=outdir, filename=(seqids[3] + '_' + seqids[2] + '.png'), dpi=dpi, hide=1, bars=bars[3], color=1, wedges=wedges[3], silent=True)
@@ -521,12 +541,16 @@ def summarize(p1d, p2d, outdir, minz=15, maxz=None, dpi=100, force=False, email=
 	allseqs = []
 	bars = []
 	seqs = {}
+	pars = []
 	if VERBOSITY: info('Aligning subsequences to sequences (x%d)' % len(fulltrans))
 	for i, pair in enumerate(fulltrans):
 		[allseqs.append(x) for x in pair]
 
 		#bar A
-		bars.append(pairstats[pair[1]][pair[0]][3])
+		#bars.append(pairstats[pair[1]][pair[0]][3])
+		#pars.append(pairstats[pair[1]][pair[0]][2])
+		bars.append(pairstats[pair[1]][pair[0]][2])
+		pars.append(pairstats[pair[1]][pair[0]][3])
 		#bar B, C
 
 		try: seqb = seqs[pair[1]]
@@ -543,7 +567,10 @@ def summarize(p1d, p2d, outdir, minz=15, maxz=None, dpi=100, force=False, email=
 		bars.append(identifind(alnregs[pair[1]][pair[2]][1], seqc)[2:4])
 
 		#bar D
-		bars.append(pairstats[pair[2]][pair[3]][3])
+		#bars.append(pairstats[pair[2]][pair[3]][3])
+		#pars.append(pairstats[pair[2]][pair[3]][2])
+		bars.append(pairstats[pair[2]][pair[3]][2])
+		pars.append(pairstats[pair[2]][pair[3]][3])
 
 		try: subseqs = alnregs[pair[1]][pair[2]]
 		except KeyError: subseqs = alnregs[pair[2]][pair[1]]
@@ -556,8 +583,9 @@ def summarize(p1d, p2d, outdir, minz=15, maxz=None, dpi=100, force=False, email=
 		except KeyError: 
 			with open('%s/sequences/%s.fa' % (outdir, x)) as f: seqs[x] = f.read()
 
+	
 	for i in range(0, len(allseqs), 4):
-		quod_set(tuple(allseqs[i:i+4]), seqs, outdir + '/sequences', outdir + '/graphs/', dpi=dpi, force=force, bars=bars[i:i+4], silent=not i)
+		quod_set(tuple(allseqs[i:i+4]), seqs, outdir + '/sequences', outdir + '/graphs/', dpi=dpi, force=force, bars=bars[i:i+4], silent=not i, pars=pars[i//2:i//2+2])
 
 	#make graphs for all pairs of sequences
 	for s1 in alnregs: 
