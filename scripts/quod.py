@@ -339,20 +339,6 @@ def what(sequences, labels=None, imgfmt='png', directory=None, filename=None, ti
 	plt.close()
 	#fig.clear()
 
-#def parse_csranges(csranges):
-#	#assumes csranges is already in ['x-y', 'i-j,u-v'] format
-#	if not csranges: return []
-#	out = []
-#	for rangeset in csranges:
-#		out.append([])
-#		if rangeset.strip().lower() == 'skip': 
-#			out[-1] = None
-#			continue
-#		for span in re.split('\s*,\s*', rangeset):
-#			out[-1].append([int(x) for x in re.split('\s*-\s*', span)])
-#
-#	return out
-
 def parse_csranges(colranges):
 	#assumes colranges is already in ['x-y:color', 'i-j:color,u-v:color'] format
 	if not colranges: return []
