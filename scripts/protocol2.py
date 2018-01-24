@@ -262,7 +262,8 @@ class Compare:
             targetSeq  = targetSeq.replace('-','')
             alnLength  = len(str(result['subject_aln']))
             if ( len(subjectSeq) >= self.minAln and
-                 len(targetSeq)  >= self.minAln ):
+                 len(targetSeq)  >= self.minAln and 
+                 int(result['gsat_score']) > 8):
                 myrow = row_template[:]
                 mydata = data_template[:]
                 result['match_aln'] = str(result['match_aln']).replace('.',' ')
@@ -305,7 +306,7 @@ class Compare:
                     pass
                 myrows.append(myrow)
                 mydatas.append(mydata)
-                if int(result['gsat_score']) >= 5:
+                if int(result['gsat_score']) > 8:
                     tblLine = "\t".join([ result['subject_symbol'],
                                           result['target_symbol'],
                                           str(round(result['z_score'],2)),

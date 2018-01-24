@@ -9,6 +9,7 @@ from urllib2 import urlopen
 import hmmtop,shutil
 from math import ceil
 import sys,os,pickle
+import subprocess
 import matplotlib
 import hmmgap
 import tcdb
@@ -31,10 +32,12 @@ class Tools:
         self.goodresults  = []
         self.bestresults  = []
         self.notmsresults = []
+	self.substrates = {}
         self.debug=True
         self.tms = {}
         self.expect = 0.001
         self.minlen = 50
+	self.mincov = 40.0
         self.myqueries = False
         self.mytcdb = False
         self.rows = []
@@ -45,10 +48,17 @@ class Tools:
         self.ortho = False
         self.query_gis = False
         self.target_gis = False
+	self.esort = False
         self.alabel = 'Query'
         self.blabel = 'TCDB-Hit'
         self.names  = tcdb.Names()
-        self.substrates = tcdb.Substrates()
+	self.loadSubstrates()
+
+	#Sequence dictionaries
+	self.queries = {}
+	self.tcdbHits = {}	
+
+        #self.substrates = tcdb.Substrates()
         tcdb.use_local()
         tcdb.use_local_betabarrel()
 
@@ -73,10 +83,12 @@ class Tools:
                 db=self.tcdb,
                 evalue=self.expect,
                 out=blast_out,
-                outfmt=5
+                outfmt=5,
+		comp_based_stats='0'
             )
             blastp()
             print "Blasted :: %s" %query.id
+
 
     def prep_orthologs(self):
         queries = SeqIO.parse(open(self.query),'fasta')
@@ -100,7 +112,8 @@ class Tools:
             SeqIO.write(targets[tgi.strip()],mytargets,'fasta')
         myqueries.flush()
         mytargets.flush()
-        os.system('makeblastdb -dbtype prot -in '+mytargets.name)
+        #os.system('makeblastdb -dbtype prot -in '+mytargets.name)
+        subprocess.call(('makeblastdb -dbtype prot -in '+mytargets.name).split())
         self.query = myqueries.name
         self.tcdb = mytargets.name
 
@@ -127,9 +140,37 @@ class Tools:
                         hsps = [i for i in record[1].hsps]
                         hsps.sort(key=lambda x:x.expect)
                         hsp = hsps[0]
+
+
+			if not blast.query_length:
+				print('No Query Length')	
+				print(vars(blast))
+
+			if not record[1].length:
+
+				print('No hit length')
+				print(vars(record[1]))
+
+			q_len = blast.query_length
+			h_len = record[1].length
+
+			qcov = (len(hsp.match)/float(q_len))*100
+			hcov = (len(hsp.match)/float(h_len))*100
+
+			if qcov >= 100:
+		
+				qcov = 100.0
+			
+			if hcov >= 100:
+
+				hcov = 100.0
+
                         if record[0].e > self.expect or len(hsp.match) < self.minlen:
                             continue
-                        rez.append((query,record,hsp)) # (genome ID, hit record <e,title>, hit.hsp)
+
+			if qcov >= self.mincov or scov >= self.mincov:
+
+                        	rez.append((query,record,hsp,q_len,h_len,qcov,hcov)) # (genome ID, hit record <e,title>, hit.hsp)
                     except:
                         pass
             except:
@@ -142,15 +183,15 @@ class Tools:
         mytcdb = []
         myquery = []
         tcdb = SeqIO.parse(self.tcdb,'fasta')
-        tcdb=nr_dict(tcdb)
+        self.tcdbHits = nr_dict(tcdb)
         queries= SeqIO.parse(self.query,'fasta')
-        queries= SeqIO.to_dict(queries)
-        for query,hit,hsp in self.goodresults:
+        self.queries= SeqIO.to_dict(queries)
+        for query,hit,hsp,q_len,h_len,qcov,hcov in self.goodresults:
             hit = hit[0]
             query=ParseDefline(query).id
-            myquery.append(queries[str(query)])
+            myquery.append(self.queries[str(query)])
             try:
-                mytcdb.append(tcdb[ParseDefline(hit.title,True).id])
+                mytcdb.append(self.tcdbHits[ParseDefline(hit.title,True).id])
             except:
                 (family,tcid,acc) = ParseTC(hit.title)
                 #print tcid,acc
@@ -177,7 +218,7 @@ class Tools:
         return
 
     def calculate_tms_scores(self):
-        for genome,tcdb,hsp in self.goodresults:
+        for genome,tcdb,hsp,q_len,h_len,qcov,hcov in self.goodresults:
             genome=ParseDefline(genome).id
             tcdb=tcdb[0]
             delta  = hsp.sbjct_start-hsp.query_start
@@ -189,14 +230,23 @@ class Tools:
             except KeyError:
                 # Genome or TCDB hit dont have a TMS.
                 # These must be manually revised later!
-                self.notmsresults.append((genome,tcdb,hsp,None))
+                self.notmsresults.append((genome,tcdb,hsp,q_len,h_len,qcov,hcov,None))
                 continue
             g_tms = [[i[0]+delta,i[1]+delta] for i in genome_tms]
             overlap = self.find_overlap(g_tms,tcdb_tms)
-            row= (genome,tcdb,hsp,overlap)
+            row= (genome,tcdb,hsp,q_len,h_len,qcov,hcov,overlap)
             self.bestresults.append(row)
-        self.bestresults.sort(key=lambda x:(x[1].e,x[3],self.tcsort(x[1].title)))
-        self.notmsresults.sort(key=lambda x:(x[1].e,self.tcsort(x[1].title)))
+
+	if self.esort:
+
+		self.bestresults.sort(key=lambda x:(x[1].e,x[7],self.tcsort(x[1].title)))
+        	self.notmsresults.sort(key=lambda x:(x[1].e,self.tcsort(x[1].title)))
+
+	else:
+
+		self.bestresults.sort(key=lambda x:(self.tcsort(x[1].title),x[1].e,-1.0*max(x[6],x[5])))
+		self.notmsresults.sort(key=lambda x:(self.tcsort(x[1].title),x[1].e,-1.0*max(x[6],x[5])))	
+
 
 
     def find_overlap(self,query,target):
@@ -223,7 +273,8 @@ class Tools:
         return ( int(tc[0]), str(tc[1]), int(tc[2]), int(tc[3]), int(tc[4]) )
 
     def build_view(self,data):
-        (genome,tcdb,hsp,overlap) = data
+        (genome,tcdb,hsp,q_len,h_len,qcov,hcov,overlap) = data
+
         try:
             os.mkdir(self.indir+"/img")
         except:
@@ -231,6 +282,7 @@ class Tools:
         genome=ParseDefline(genome).id
         tid = ParseDefline(tcdb.title,True).id
         if os.path.exists(self.indir+"/img/"+genome+".png") is False:
+
             try:
                 san = self.queryhmg(self.myqueries[genome],hsp.query)
                 tan = self.tcdbhmg(self.mytcdb[tid],hsp.sbjct)
@@ -272,6 +324,8 @@ class Tools:
          ****************************************************
         '''
         ident = round((float(hsp.identities)/len(hsp.match))*100)
+
+	'''
         substrate_info= self.substrates.get_tcid_substrates(tcid)
         mysubstrate_html = ''
         mysubstrate_tsv = ''
@@ -295,7 +349,17 @@ class Tools:
         
             mysubstrate_html = 'None'
             mysubstrate_tsv = 'None'
+	'''
 
+	substrate = ''
+
+	try:
+
+	    substrate = self.substrates[tcid]
+
+	except:
+
+	    substrate = 'None'
 
         '''
         html_results (VI)
@@ -303,8 +367,8 @@ class Tools:
 
         glink = '<a href="content.html#%s">%s</a>'%(genome,genome)
         tclink = '<a href="http://tcdb.org/search/result.php?tc={}">{}</a>'.format(tcid,tcid)
-        h_row = (glink,acc,tclink,tcdb.title,len(hsp.match),tcdb.e,ident,query_tms,\
-        hit_tms,overlap,family,mysubstrate_html,self.globalcount)
+        h_row = (glink,acc,tclink,tcdb.title,len(hsp.match),tcdb.e,ident,q_len,h_len,qcov,hcov,query_tms,\
+        hit_tms,overlap,family,substrate,self.globalcount)
         h_row =['<td>'+str(i)+'</td>' for i in h_row]
         htmlrow = "<tr>\n%s\n</tr>"%("\n\t".join(h_row))
 
@@ -313,9 +377,15 @@ class Tools:
         text results (VI)
         '''
 
-        row = (genome,acc,tcid,tcdb.title,len(hsp.match),tcdb.e,ident,query_tms,hit_tms,overlap,family,mysubstrate_tsv,self.globalcount)
+        row = (genome,acc,tcid,tcdb.title,len(hsp.match),tcdb.e,ident,q_len,h_len,qcov,hcov,query_tms,hit_tms,overlap,family,substrate,self.globalcount)
         row =[str(i) for i in row]
         txtrow = "%s\n"%("\t".join(row))
+
+	'''
+	content results (VI)
+	'''
+
+	self.plotHydro(genome,tcdb,acc,hsp)
 
         #self.rows.append(htmlrow)
         if self.cdd_on is True:
@@ -323,11 +393,13 @@ class Tools:
         else:
             mycdd = ''
         ol = float(overlap) if overlap is not None else float(0)
-        content = '''<div class='result' id='%s'> <h3><a name='%s'>%s</a></h3>  <p>Hit Gi: %s<br>   Hit TCID: %s</p> <p>Hit Description: %s<br>
+        content = '''<div class='result' id='%s'> <h3><a name='%s'>%s</a></h3>  <p>Hit Accession: %s<br>   Hit TCID: %s</p> <p>Hit Description: %s<br>
         <br>   Mach Len: %i<br>   e:%f</p> <p>Query TMS Count : %i<br>   Hit TMS Count: %i     <br>     TMS-Overlap Score: %f<br>
-        Predicted Substrates:%s <br><br>     BLAST Alignment:<br>     <pre>     %s     </pre> <br>  <br> Pairwise Alignment-Hydropathy Plot:<br>
-        <img src='img/%s.png'><br>%s </p> </div>\n''' %(genome,genome,genome,acc,tcid,tcdb.title,\
-        len(hsp.match),tcdb.e,query_tms,hit_tms,ol,mysubstrate_html,str(hsp),urlencode(genome),mycdd)
+        Predicted Substrates:%s <br><br>     BLAST Alignment:<br>     <pre>     %s     </pre> <br>  <table><tr><th>Protein Hydropathy Plots:</th></tr> 
+	<tr><td><img src='img/%s_hydro.png'></td> <td><img src='img/%s_hydro.png'></td></tr><br>
+	<tr><th><br> Pairwise Alignment-Hydropathy Plot:<br></th></tr>
+        <tr><td colspan="2" style="text-align: center;"><img src='img/%s.png'></td></tr></table><br>%s </p> </div>\n''' %(genome,genome,genome,acc,tcid,tcdb.title,\
+        len(hsp.match),tcdb.e,query_tms,hit_tms,ol,substrate,str(hsp),genome,acc,urlencode(genome),mycdd)
         #self.data.append(content)
         return htmlrow,content,txtrow
 
@@ -342,20 +414,20 @@ class Tools:
         
         '''
             
-        We are unsure of whuy the lobal number variable( the one that is supposed to count which result it is) is the last number in the rows.  --Vasu Pranav Sai Iddamsetty
+        We are unsure of why the local number variable( the one that is supposed to count which result it is) is the last number in the rows.  --Vasu Pranav Sai Iddamsetty
         '''
         
         
         #write to results.html and content.html (VI)
         html = '''<html><table width="100%%" border="1"> <tr> <td>Query ID</td> <td>Hit ID</td>
-        <td>Hit TCID</td> <td>Hit Description</td> <td>Match Len</td> <td>e-Val</td> <td>% Identity</td> <td>Query TMS#</td>
-        <td>Hit TMS#</td> <td>TM-Overlap Score</td> <td>Family Abrv.</td><td>Predicted Substrate</br>(Category,Gen_sub,Spec_sub,Chebi_ID,Status)</td> <td> #</td> </tr><br>\n\n'''
+        <td>Hit TCID</td> <td>Hit Description</td> <td>Match Len</td> <td>e-Val</td> <td>% Identity</td> <td>Query Length</td> <td>Hit Length</td> <td>Query Coverage</td> <td>Hit Coverage</td> <td>Query TMS#</td>
+        <td>Hit TMS#</td> <td>TM-Overlap Score</td> <td>Family Abrv.</td><td>Predicted Substrate</td> <td> #</td> </tr><br>\n\n'''
         html_results.write(html)
         content.write("<html>")
         
         
         #write the column descriptions to results.tsv (VI)
-        columnDescription = '''#Query_id\tHit_xid\tHit_tcid\tHit_desc\tMatch_length\te-value\t%_identity\tQuery_n_TMS\tHit_n_TMS\tTM_Overlap_Score\tFamily_tcid\tPredicted_Substrate(Category,Gen_sub,Spec_sub,Chebi_ID(s),Status)\trow_number\n'''
+        columnDescription = '''#Query_id\tHit_xid\tHit_tcid\tHit_desc\tMatch_length\te-value\t%_identity\tQuery_Length\tHit_Length\tQuery_Coverage\tHit_Coverage\tQuery_n_TMS\tHit_n_TMS\tTM_Overlap_Score\tFamily_Abrv\tPredicted_Substrate\trow_number\n'''
         tsv_results.write(columnDescription)
         
         
@@ -384,6 +456,23 @@ class Tools:
         html_results.write("</table></html>")
         content.write("</html>")
 
+    def loadSubstrates(self):
+
+	print('Loading Substrates')
+
+	substrateData = urlopen('http://tcdb.org/cgi-bin/projectv/getSubstrates.py')
+
+	#print(vars(substrateData))
+
+	for line in substrateData:
+
+	    data = line.replace('\n','').split('\t')
+
+	    self.substrates[data[0]] = data[1]
+
+	return
+		 	
+
     def cdd_extract(self):
         if os.path.exists(self.indir+'/cdd') is False:
             os.mkdir(self.indir+'/cdd')
@@ -394,6 +483,42 @@ class Tools:
                 cdd.fetch(str(hsp.query),thisdir+query.title()+'.1.png')
             if os.path.exists(thisdir+query.title()+'.2.png') is False:
                 cdd.fetch(str(hsp.sbjct),thisdir+query.title()+'.2.png')
+
+    '''
+    Plots individual Protein hydropathies (VI)
+    '''
+
+    def plotHydro(self,genome,hit,acc,hsp):
+
+	#File Paths
+
+	queryPath = self.indir+'/img/'+genome+'_hydro.png'
+	hitPath = self.indir+'/img/'+acc+'_hydro.png'
+
+	quod = ' -s -q -d {} '.format(self.indir+"/img/")
+
+
+	#Query Hydropathy
+	if not os.path.exists(queryPath):
+
+	    query=ParseDefline(genome).id
+	    querySeq = self.queries[str(query)].seq
+
+	    query = 'quod.py {} -o {} -c blue -W {},1 {},-1 -l {}'.format(querySeq,genome+'_hydro.png',hsp.query_start,hsp.query_end,genome) + quod
+
+	    #os.system(query)
+	    subprocess.call(query.split())
+
+	#Hit Hydropathy
+	if not os.path.exists(hitPath):
+	
+	    hitID = ParseDefline(hit.title,True).id
+	    hitSeq = self.tcdbHits[str(hitID)].seq
+	    hit = 'quod.py {} -o {} -c red -W {},1 {},-1 -l {}'.format(hitSeq, acc+'_hydro.png',hsp.sbjct_start,hsp.sbjct_end,acc) + quod
+
+	    #os.system(hit)
+	    subprocess.call(hit.split())
+
 
     def hydro(self,gseq):
         seq=gseq.replace('-','')
@@ -459,6 +584,7 @@ class Tools:
 
         return newhydro
 
+
     def what(self,a,b,outfile,hmt=[]):
         #quit()
         ha = self.hydro(a)
@@ -497,13 +623,6 @@ class Tools:
         plt.savefig(outfile, dpi=80, format="png",bbox_inches='tight', pad_inches=0.003)
         plt.clf()
 
-def checkDictionary():
-
-    if  not os.path.isfile(os.environ['PYTHONPATH'] + '/substrate_dict.py'):
-
-        print('Substrate dictionary not found in {}. Contact your administrator for assistance.\n\n'.format(os.environ['PYTHONPATH']))
-
-        exit()
 
 
 if __name__=="__main__":
@@ -530,6 +649,19 @@ if __name__=="__main__":
                     default=0.001,
                     help="Minimum e-Value [0.001]"
     )
+    opts.add_option('--cov',
+		    action='store',
+		    type='float',
+		    dest='mincov',
+		    default=40.0,
+		    help="Minimum Proten Coverage [40.0]"
+    )
+    opts.add_option('--esort',
+		    action='store_true',
+		    dest='esort',
+		    default=False,
+		    help="Use e-value as the preliminary criteria for sorting"
+    )    
     opts.add_option('--betabarrel',
                     action='store_true',
                     dest='bb',
@@ -562,7 +694,6 @@ if __name__=="__main__":
     )
     (cli,args)=opts.parse_args()
     if cli.input is not None and cli.output is not None:
-        checkDictionary()
         GB = Tools()
         if(cli.bb):
             GB.dbfile = '/db/betabarrel'
@@ -573,6 +704,8 @@ if __name__=="__main__":
         GB.query_gis  = cli.subgi
         GB.target_gis = cli.targi
         GB.expect = cli.evalue
+	GB.mincov = cli.mincov
+	GB.esort=cli.esort
         GB.blast_all()
         print "Loading BLAST results"
         GB.load_good()

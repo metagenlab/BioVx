@@ -27,7 +27,7 @@ def inputRangeCut(file_path,outdir,outFile,start,end):
 
 		output =''
 		if outFile != '':
-			output = outFile + '_' + str(num)
+			output = outFile
 		else:
 			seqName = seqID.replace(':','_')
 			output = re.search(r'([0-9a-zA-Z_\.-]+)',seqName).group(1)
@@ -74,7 +74,6 @@ def inputEqualSplit(file_path,outdir,outFile,parts):
 
 	in_file = open(os.path.relpath(file_path), "rU")
 
-	num = 1
 
 	#Prepare individual sequence and send to equalSplitSeq
 	for record in SeqIO.parse(in_file, "fasta"):
@@ -83,13 +82,12 @@ def inputEqualSplit(file_path,outdir,outFile,parts):
 
 		output =''
 		if outFile != '':
-			output = outFile + '_' + str(num)
+			output = outFile
 		else:
 			seqName = seqID.replace(':','_')
 			output = re.search(r'([0-9a-zA-Z_\.-]+)',seqName).group(1)
 
 		equalSplitSeq(sequence,seqID,outdir,output,parts)
-		num += 1
 
 """
 checkInput validates existence of the input file. If the file does
