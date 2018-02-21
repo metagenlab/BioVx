@@ -199,7 +199,7 @@ def tms_color(n):
 		elif r == 2: return 'darkgreen'
 	else: return n
 
-def what(sequences, labels=None, imgfmt='png', directory=None, filename=None, title=False, dpi=80, hide=True, viewer=None, bars=[], color='auto', offset=0, statistics=False, overwrite=False, manual_tms=None, wedges=[], ywedge=2, legend=False, window=19, silent=False, axisfont=None, tickfont=None, xticks=None, mode='hydropathy'):
+def what(sequences, labels=None, imgfmt='png', directory=None, filename=None, title=False, dpi=80, hide=True, viewer=None, bars=[], color='auto', offset=0, statistics=False, overwrite=False, manual_tms=None, wedges=[], ywedge=2, legend=False, window=19, silent=False, axisfont=None, tickfont=None, xticks=None, mode='hydropathy', width=None, height=None):
 	#wedges: [(x1, dx1), (x2, dx2), ...]
 
 	try: color = int(color)
@@ -320,7 +320,11 @@ def what(sequences, labels=None, imgfmt='png', directory=None, filename=None, ti
 	plt.legend().set_visible(legend)
 	#fig = plt.gcf()
 	#fig.set_size_inches(15, 3)
-	plt.gcf().set_size_inches(15, 3)
+
+	if width == None: width = (0.0265)*maxl if maxl > 600 else 15
+	if height == None: height = 5.5
+	plt.gcf().set_size_inches(width, height)
+
 	plt.savefig(filename, dpi=dpi, format=imgfmt, bbox_inches='tight', pad_inches=0.003)
 	if VERBOSITY != VERBOSITY: 
 		if len(labels) == 1: print('%s: %s' % (filename, labels[0]))
@@ -404,11 +408,13 @@ if __name__ == '__main__':
 	parser.add_argument('-m', '--manual-tms', metavar='TMSs', nargs='+', help='Use these comma-separated ranges as TMSs instead of HMMTOP output. Use spaces to separate ranges for other sequences and \'skip\' to skip sequences (i.e. letting HMMTOP assign TMSs. Use colons to specify colors for individual TMSs. Example: -m 1-20:orange paints residues between 1 and 20 inclusive orange. -m 30-50,55-75:cyan paints residues between 30 and 50 inclusive the default color and residues between 55 and 75 inclusive cyan.')
 	#parser.add_argument('-M', '--colored-tms', metavar='TMSs', nargs='+', help='As -m, but use colons to specify colors')
 	parser.add_argument('-w', '--wedges', metavar='wedgex,wedgedx', nargs='+', help='Draw dx-long wedges starting at x. Negative dx values result in left-pointing wedges, and positive dx values result in right-pointing wedges.')
-	parser.add_argument('-W', '--walls', metavar='x(,dx(,y))', nargs='+', help='Shorthand to specifying both --wedges and --bars for the same x-values. Cumulative with both')
+	parser.add_argument('-W', '--walls', metavar='x(,dx(,y))', nargs='+', help='Shorthand to specifying both --wedges and --bars for the same x-values. Cumulative with both. x specifies the x-position of the bar and wedge {mandatory}, dx specifies the direction (and size, if values other than 1 and -1 are used, defaulting to 1) {default:1}, and y specifies the y-position of the wedge {default:2}. Example: "23,1,2 41,-1,2" draws bars and wedges at 23 and 41 pointing inward. "23 41,-1" draws the same but is marginally shorter. "61,1,-2 81,-1,2" draws a bar and right-pointing wedge at y=-2 and a bar and left-pointing wedge at y=2')
 
-	parser.add_argument('--xticks', metavar='interval', type=float, help='Spacing between x ticks')
-	parser.add_argument('--axis-font', metavar='size', type=int, help='Axis label size')
-	parser.add_argument('--tick-font', metavar='size', type=int, help='Tick label size')
+	parser.add_argument('--width', metavar='width', type=float, help='Plot width in inches {default:dynamic}')
+	parser.add_argument('--height', metavar='height', type=float, help='Plot height in inches {default:5.5}')
+	parser.add_argument('--xticks', metavar='interval', type=float, help='Spacing between x ticks {default:None}')
+	parser.add_argument('--axis-font', metavar='size', type=int, help='Axis label size {default:None}')
+	parser.add_argument('--tick-font', metavar='size', type=int, help='Tick label size {default:None}}')
 
 	args = parser.parse_args()
 
@@ -469,4 +475,4 @@ if __name__ == '__main__':
 	if args.bars:
 		wedges += [Wedge(int(x), 0, 0) for x in args.bars]
 
-	what(sequences, labels=labels, imgfmt=args.t, directory=args.d, filename=args.o, title=args.l, dpi=args.r, hide=args.q, viewer=args.a, overwrite=True, color=args.color, statistics=args.statistics, offset=args.offset, manual_tms=parse_csranges(args.manual_tms), wedges=wedges, xticks=args.xticks, axisfont=args.axis_font, tickfont=args.tick_font, mode=mode)
+	what(sequences, labels=labels, imgfmt=args.t, directory=args.d, filename=args.o, title=args.l, dpi=args.r, hide=args.q, viewer=args.a, overwrite=True, color=args.color, statistics=args.statistics, offset=args.offset, manual_tms=parse_csranges(args.manual_tms), wedges=wedges, xticks=args.xticks, axisfont=args.axis_font, tickfont=args.tick_font, mode=mode, width=args.width, height=args.height)
