@@ -258,16 +258,16 @@ def quod_set(seqids, sequences, indir, outdir, dpi=300, force=False, bars=[], pr
 			medges[-1].append(quod.Wedge(x=x, dx=ove(j), y=y))
 
 	#Draw A: barred by B
-	quod.what([sequences[seqids[0]]], title=seqids[0], imgfmt='png', directory=outdir, filename=(seqids[0] + '_' + seqids[1] + '.png'), dpi=dpi, hide=1, bars=bars[0], wedges=wedges[0], silent=silent)
+	quod.what([sequences[seqids[0]]], title=seqids[0], imgfmt='png', directory=outdir, filename=(seqids[0] + '_' + seqids[1] + '.png'), dpi=dpi, hide=1, bars=bars[0], wedges=wedges[0], silent=silent, width=15, height=3)
 
 	#Draw B: barred by C
-	quod.what([sequences[seqids[1]]], title=seqids[1], imgfmt='png', directory=outdir, filename=(seqids[1] + '_' + seqids[2] + '.png'), dpi=dpi, hide=1, bars=bars[1], wedges=wedges[1]+medges[0], silent=True)
+	quod.what([sequences[seqids[1]]], title=seqids[1], imgfmt='png', directory=outdir, filename=(seqids[1] + '_' + seqids[2] + '.png'), dpi=dpi, hide=1, bars=bars[1], wedges=wedges[1]+medges[0], silent=True, width=15, height=3)
 
 	#Draw C: barred by B
-	quod.what([sequences[seqids[2]]], title=seqids[2], imgfmt='png', directory=outdir, filename=(seqids[2] + '_' + seqids[1] + '.png'), dpi=dpi, hide=1, bars=bars[2], color=1, wedges=wedges[2]+medges[1], silent=True)
+	quod.what([sequences[seqids[2]]], title=seqids[2], imgfmt='png', directory=outdir, filename=(seqids[2] + '_' + seqids[1] + '.png'), dpi=dpi, hide=1, bars=bars[2], color=1, wedges=wedges[2]+medges[1], silent=True, width=15, height=3)
 
 	#Draw D: barred by C
-	quod.what([sequences[seqids[3]]], title=seqids[3], imgfmt='png', directory=outdir, filename=(seqids[3] + '_' + seqids[2] + '.png'), dpi=dpi, hide=1, bars=bars[3], color=1, wedges=wedges[3], silent=True)
+	quod.what([sequences[seqids[3]]], title=seqids[3], imgfmt='png', directory=outdir, filename=(seqids[3] + '_' + seqids[2] + '.png'), dpi=dpi, hide=1, bars=bars[3], color=1, wedges=wedges[3], silent=True, width=15, height=3)
 
 
 def build_html(bc, indir, blasts, outdir='hvordan_out/html', filename='test.html', lastpair=None, nextpair=None):
