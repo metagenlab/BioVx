@@ -14,6 +14,7 @@ import matplotlib
 import hmmgap
 import tcdb
 import cdd
+from decimal import Decimal
 from sys import exit
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -154,8 +155,8 @@ class Tools:
 			q_len = blast.query_length
 			h_len = record[1].length
 
-			qcov = (len(hsp.match)/float(q_len))*100
-			hcov = (len(hsp.match)/float(h_len))*100
+			qcov = float('%.1f'%(((hsp.query_end-hsp.query_start)/float(q_len))*100))
+			hcov = float('%.1f'%(((hsp.sbjct_end-hsp.sbjct_start)/float(h_len))*100))
 
 			if qcov >= 100:
 		
@@ -396,10 +397,10 @@ class Tools:
         content = '''<div class='result' id='%s'> <h3><a name='%s'>%s</a></h3>  <p>Hit Accession: %s<br>   Hit TCID: %s</p> <p>Hit Description: %s<br>
         <br>   Mach Len: %i<br>   e:%f</p> <p>Query TMS Count : %i<br>   Hit TMS Count: %i     <br>     TMS-Overlap Score: %f<br>
         Predicted Substrates:%s <br><br>     BLAST Alignment:<br>     <pre>     %s     </pre> <br>  <table><tr><th>Protein Hydropathy Plots:</th></tr> 
-	<tr><td><img src='img/%s_hydro.png'></td> <td><img src='img/%s_hydro.png'></td></tr><br>
+	<tr><td><img src='img/%s_hydro.png'></td> <td><img src='img/%s-%s_hydro.png'></td></tr><br>
 	<tr><th><br> Pairwise Alignment-Hydropathy Plot:<br></th></tr>
         <tr><td colspan="2" style="text-align: center;"><img src='img/%s.png'></td></tr></table><br>%s </p> </div>\n''' %(genome,genome,genome,acc,tcid,tcdb.title,\
-        len(hsp.match),tcdb.e,query_tms,hit_tms,ol,substrate,str(hsp),genome,acc,urlencode(genome),mycdd)
+        len(hsp.match),tcdb.e,query_tms,hit_tms,ol,substrate,str(hsp),genome,acc,genome,urlencode(genome),mycdd)
         #self.data.append(content)
         return htmlrow,content,txtrow
 
@@ -462,13 +463,14 @@ class Tools:
 
 	substrateData = urlopen('http://tcdb.org/cgi-bin/projectv/getSubstrates.py')
 
-	#print(vars(substrateData))
 
 	for line in substrateData:
 
-	    data = line.replace('\n','').split('\t')
+	    if len(line) == 2:
 
-	    self.substrates[data[0]] = data[1]
+	    	data = line.replace('\n','').split('\t')
+	    	print(data)
+	    	self.substrates[data[0]] = data[1]
 
 	return
 		 	
@@ -493,9 +495,9 @@ class Tools:
 	#File Paths
 
 	queryPath = self.indir+'/img/'+genome+'_hydro.png'
-	hitPath = self.indir+'/img/'+acc+'_hydro.png'
+	hitPath = self.indir+'/img/'+acc+'-'+genome+'_hydro.png'
 
-	quod = ' -s -q -d {} '.format(self.indir+"/img/")
+	quod = ' -s -q -d {} --width 15 '.format(self.indir+"/img/")
 
 
 	#Query Hydropathy
@@ -503,7 +505,6 @@ class Tools:
 
 	    query=ParseDefline(genome).id
 	    querySeq = self.queries[str(query)].seq
-
 	    query = 'quod.py {} -o {} -c blue -W {},1 {},-1 -l {}'.format(querySeq,genome+'_hydro.png',hsp.query_start,hsp.query_end,genome) + quod
 
 	    #os.system(query)
@@ -514,7 +515,7 @@ class Tools:
 	
 	    hitID = ParseDefline(hit.title,True).id
 	    hitSeq = self.tcdbHits[str(hitID)].seq
-	    hit = 'quod.py {} -o {} -c red -W {},1 {},-1 -l {}'.format(hitSeq, acc+'_hydro.png',hsp.sbjct_start,hsp.sbjct_end,acc) + quod
+	    hit = 'quod.py {} -o {} -c red -W {},1 {},-1 -l {}'.format(hitSeq, acc+'-'+genome+'_hydro.png',hsp.sbjct_start,hsp.sbjct_end,acc) + quod
 
 	    #os.system(hit)
 	    subprocess.call(hit.split())
@@ -660,8 +661,9 @@ if __name__=="__main__":
 		    action='store_true',
 		    dest='esort',
 		    default=False,
-		    help="Use e-value as the preliminary criteria for sorting"
-    )    
+		    help="Use e-value as the preliminary criteria for sorting (otherwise sorted by TCID)"
+    )
+    '''    
     opts.add_option('--betabarrel',
                     action='store_true',
                     dest='bb',
@@ -692,17 +694,18 @@ if __name__=="__main__":
                     default=False,
                     help="Ortholog search using list of only these targets"
     )
+    '''
     (cli,args)=opts.parse_args()
     if cli.input is not None and cli.output is not None:
         GB = Tools()
-        if(cli.bb):
-            GB.dbfile = '/db/betabarrel'
-        GB.ortho  = cli.ortho
+        #if(cli.bb):
+            #GB.dbfile = '/db/betabarrel'
+        GB.ortho  = False
         GB.indir  = cli.output
-        GB.cdd_on = cli.cdd
+        GB.cdd_on = False
         GB.query  = cli.input
-        GB.query_gis  = cli.subgi
-        GB.target_gis = cli.targi
+        GB.query_gis  = False
+        GB.target_gis = False
         GB.expect = cli.evalue
 	GB.mincov = cli.mincov
 	GB.esort=cli.esort
