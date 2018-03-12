@@ -466,11 +466,10 @@ class Tools:
 
 	for line in substrateData:
 
-	    if len(line) == 2:
+	    data = line.replace('\n','').split('\t')
+	    #print(data)
+	    self.substrates[data[0]] = data[1].replace('|',', ')
 
-	    	data = line.replace('\n','').split('\t')
-	    	print(data)
-	    	self.substrates[data[0]] = data[1]
 
 	return
 		 	
