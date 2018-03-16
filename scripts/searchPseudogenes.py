@@ -190,10 +190,10 @@ def main():
 			familyid, dash, proteinid = accessions[0].partition('-')
 			createDirectory( args.out )
 			# extract the protein sequence from database and put it into the directory created before
-			if args.overwrtie or checkProtein( proteinid, args.out ):
+			if args.overwrite or checkProtein( proteinid, args.out ):
 				proteinFile = getProteinFromFile( args.query, proteinid, args.out )
 			else:
-				proteinFile = proteinid + '.faa'
+				proteinFile = args.out + '/' + proteinid + '.faa'
 	else:
 		# create a list for input query strings
 		accessions = args.query.split(',')
@@ -202,7 +202,7 @@ def main():
 		if args.overwrite or checkProtein( proteinid, args.out ):
 			proteinFile = getProtein( args.query, proteinid, args.out )
 		else:
-			proteinFile = proteinid + '.faa'
+			proteinFile = args.out + '/' + proteinid + '.faa'
 
 	# form the output
 	# check if any output exists or overwirte is on 
