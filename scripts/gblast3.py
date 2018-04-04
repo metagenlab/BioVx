@@ -166,10 +166,12 @@ class Tools:
 
 				hcov = 100.0
 
-                        if record[0].e > self.expect or len(hsp.match) < self.minlen:
-                            continue
+                        
+			if record[0].e > self.expect or len(hsp.match) < self.minlen:
+				continue
+			
 
-			if qcov >= self.mincov or scov >= self.mincov:
+			if qcov >= self.mincov or hcov >= self.mincov:
 
                         	rez.append((query,record,hsp,q_len,h_len,qcov,hcov)) # (genome ID, hit record <e,title>, hit.hsp)
                     except:
