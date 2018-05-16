@@ -729,7 +729,10 @@ def main(infiles, **kwargs):
 	if outfile is None: outfile = sanitize(plot.ax.get_title())
 
 	if len(os.path.splitext(outfile)) == 1: outfile += '.{}'.format(imgfmt)
-	elif len(os.path.splitext(outfile)[-1]) not in [3, 4]: outfile += '.{}'.format(imgfmt)
+	elif len(os.path.splitext(outfile)[-1]) not in [3, 4]: 
+		outfile += '.{}'.format(imgfmt)
+	elif os.path.splitext(outfile)[-1].lower() != imgfmt.lower():
+		outfile += '.{}'.format(imgfmt)
 
 	plot.save(outfile, dpi=dpi, format=imgfmt)
 
