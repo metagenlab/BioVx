@@ -27,7 +27,7 @@ def parse_spans(token):
 	return spans
 
 def isid(token):
-	if re.match('^\+?[0-9]+$', token): return True
+	if re.match('^\+[0-9]+$', token): return True
 	else: return False
 
 def parse_id(token):
@@ -171,12 +171,12 @@ class Region(Vspans):
 		self.size = size
 
 	def draw(self, plot):
-		plot.ax.broken_barh(self.spans, self.yspan, facecolor=self.style, edgecolor='black')
+		plot.ax.broken_barh(self.spans, self.yspan, facecolor=self.style, edgecolor=(1,1,1,0.5), zorder=2.0)
 
 		if self.pos == 'above':
-			xytext = [self.spans[0][0], sum(self.yspan)]
+			xytext = [self.spans[0][0], sum(self.yspan)+0.01]
 		else:
-			xytext = [self.spans[0][0], self.yspan[0]]
+			xytext = [self.spans[0][0], self.yspan[0]+0.01]
 		plot.ax.annotate(self.label, xy=xytext, size=self.size)
 
 class Wall(Vspans):
@@ -235,7 +235,7 @@ class HMMTOP(Vspans):
 		out, err = p.communicate(input=fasta)
 		print(err.strip(), file=sys.stderr)
 
-		indices = re.findall('(?:IN|OUT)((?:\s*(?:[0-9]+))+)', out.strip())[0].strip().split()
+		indices = re.findall('(?: IN| OUT)((?:\s*(?:[0-9]+))+)', out.strip())[0].strip().split()
 		indices = [int(i) for i in indices[1:]]
 
 		if not indices: return
@@ -552,7 +552,6 @@ def main(infiles, **kwargs):
 					size = int(token)
 				else: color = token
 
-
 			done = []
 			for e in find(entities, What, index):
 				for ee in find(e.entities, Hydropathy):
@@ -658,6 +657,7 @@ def main(infiles, **kwargs):
 			label = None
 			color = None
 			size = None
+			alpha = None
 
 			for token in tokens:
 				if isspans(token) and not spans: spans = parse_spans(token)
