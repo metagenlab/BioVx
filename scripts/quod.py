@@ -102,8 +102,7 @@ class Plot(object):
 		ylim = self.ax.get_ylim()
 
 		maxl = xlim[1] - xlim[0]
-		if self.xticks is None:
-			self.xticks = roundto(maxl // 5, 5)
+		if self.xticks is None: self.xticks = roundto(maxl // 5, 5)
 
 		self.ax.set_xticks(np.arange(xlim[0], xlim[1]+1, self.xticks))
 		self.ax.set_yticks(np.arange(ylim[0], ylim[1]+1, self.yticks))
@@ -675,6 +674,9 @@ def main(infiles, **kwargs):
 			entities.append(Region(spans, [y-0.15, 0.15], label, style=color, size=size))
 			#for token in re.split(r':', region): print(token)
 
+	if 'xticks' in kwargs and kwargs['xticks'] is not None: plot.xticks = xticks
+	else: plot.xticks = None
+
 	if 'bars' in kwargs and kwargs['bars'] is not None: 
 		[entities.append(wall) for wall in parse_walls(kwargs['bars'], wedge=0)]
 
@@ -791,6 +793,7 @@ if __name__ == '__main__':
 	parser.add_argument('--width', metavar='width', type=float, help='Plot width in inches (default:dynamic)')
 	parser.add_argument('--window', metavar='windowsize', default=19, help='Window size for hydropathy')
 	parser.add_argument('--x-offset', metavar='init_resi', default=0, type=int, help='Sets starting x-value')
+	parser.add_argument('--xticks', default=None, type=int, help='X tick spacing')
 
 	parser.add_argument('-ar', '--add-region', metavar='x0-x1(:color)(:"label")', nargs='+')
 
@@ -817,5 +820,5 @@ if __name__ == '__main__':
 	#		tms_script += cmd + ' '
 	#tms_script = tms_script.strip()
 
-	main(args.infile, mode=args.mode, walls=args.walls, wall=args.wall, bars=args.bars, dpi=args.r, imgfmt=args.t, force_seq=args.s, outdir=args.d, outfile=args.o, color=args.color, title=args.title, quiet=args.q, viewer=args.a, axis_font=args.axis_font, width=args.width, height=args.height, x_offset=args.x_offset, add_tms=args.add_tms, delete_tms=args.delete_tms, extend_tms=args.extend_tms, replace_tms=args.replace_tms, no_tms=args.no_tms, tick_font=args.tick_font, add_marker=args.add_marker, add_region=args.add_region)
+	main(args.infile, mode=args.mode, walls=args.walls, wall=args.wall, bars=args.bars, dpi=args.r, imgfmt=args.t, force_seq=args.s, outdir=args.d, outfile=args.o, color=args.color, title=args.title, quiet=args.q, viewer=args.a, axis_font=args.axis_font, width=args.width, height=args.height, x_offset=args.x_offset, add_tms=args.add_tms, delete_tms=args.delete_tms, extend_tms=args.extend_tms, replace_tms=args.replace_tms, no_tms=args.no_tms, tick_font=args.tick_font, add_marker=args.add_marker, add_region=args.add_region, xticks=args.xticks)
 
