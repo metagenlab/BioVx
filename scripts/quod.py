@@ -221,7 +221,7 @@ class Wall(Vspans):
 					plot.ax.scatter([wx], [wy], marker=marker, color='black', s=25*abs(self.wedge))
 
 class HMMTOP(Vspans):
-	def __init__(self, gseq, style='orange', alpha=None):
+	def __init__(self, gseq, style='orange', alpha=None, nohmmtop=False):
 		Vspans.__init__(self, style=style, alpha=alpha)
 		self.spans = []
 
@@ -229,13 +229,15 @@ class HMMTOP(Vspans):
 		#no FASTA? no problem
 		if not fasta.strip(): return
 
-		if not fasta.startswith('>'): fasta = '>seq\n' + fasta
-		p = subprocess.Popen(['hmmtop', '-if=--', '-is=pseudo', '-sf=FAS', '-pi=spred'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-		out, err = p.communicate(input=fasta)
-		print(err.strip(), file=sys.stderr)
+		if nohmmtop: indices = []
+		else: 
+			if not fasta.startswith('>'): fasta = '>seq\n' + fasta
+			p = subprocess.Popen(['hmmtop', '-if=--', '-is=pseudo', '-sf=FAS', '-pi=spred'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+			out, err = p.communicate(input=fasta)
+			print(err.strip(), file=sys.stderr)
 
-		indices = re.findall('(?: IN| OUT)((?:\s*(?:[0-9]+))+)', out.strip())[0].strip().split()
-		indices = [int(i) for i in indices[1:]]
+			indices = re.findall('(?: IN| OUT)((?:\s*(?:[0-9]+))+)', out.strip())[0].strip().split()
+			indices = [int(i) for i in indices[1:]]
 
 		if not indices: return
 
@@ -392,7 +394,7 @@ class Hydropathy(Curve):
 		plot.ax.plot(self.X, self.Y, color=self.style, linewidth=1)
 
 class What(Entity):
-	def __init__(self, seq, style=0, tmscolor=None, linecolor=None, color=None):
+	def __init__(self, seq, style=0, tmscolor=None, linecolor=None, color=None, nohmmtop=False):
 		Entity.__init__(self)
 		self.seq = seq
 		self.style = style
@@ -407,7 +409,7 @@ class What(Entity):
 
 		self.entities = []
 		self.entities.append(Hydropathy(seq, style=self.get_curve_color()))
-		self.entities.append(HMMTOP(seq, style=self.get_tms_color()))
+		self.entities.append(HMMTOP(seq, style=self.get_tms_color(), nohmmtop=nohmmtop))
 
 	def get_title(self, showlength=True):
 		if self.seq.startswith('>'): 
@@ -503,27 +505,33 @@ def main(infiles, **kwargs):
 	if 'color' in kwargs and kwargs['color'] is not None: color = kwargs['color']
 	else: color = 'auto'
 
+	no_tms = []
+	if 'no_tms' in kwargs and kwargs['no_tms']:
+		target = None
+		for token in kwargs['no_tms']:
+			if not isid(token): raise ValueError('--no-tms: Not an id: "{}"'.format(token))
+			#for e in find(entities, What, parse_id(token)):
+			#	for ee in find(e.entities, HMMTOP): ee.spans = []
+			no_tms.append(parse_id(token))
+				
 	n = 0
 	if 'force_seq' in kwargs and kwargs['force_seq']: 
 		for seq in infiles: 
-			if color == 'auto': entities.append(What(seq, style=n))
-			else: entities.append(What(seq, color=color))
+			if n in no_tms: nohmmtop = 1
+			else: nohmmtop = 0
+			if color == 'auto': entities.append(What(seq, style=n, nohmmtop=nohmmtop))
+			else: entities.append(What(seq, color=color, nohmmtop=nohmmtop))
 			n += 1
 	else:
 		for fn in infiles:
 			with open(fn) as f:
 				for seq in split_fasta(f.read().decode('utf-8')):
-					if color == 'auto': entities.append(What(seq, style=n))
-					else: entities.append(What(seq, color=color))
+					if n in no_tms: nohmmtop = 1
+					else: nohmmtop = 0
+					if color == 'auto': entities.append(What(seq, style=n, nohmmtop=nohmmtop))
+					else: entities.append(What(seq, color=color, nohmmtop=nohmmtop))
 					n += 1
 
-	if 'no_tms' in kwargs and kwargs['no_tms']:
-		target = None
-		for token in kwargs['no_tms']:
-			if not isid(token): raise ValueError('--no-tms: Not an id: "{}"'.format(token))
-			for e in find(entities, What, parse_id(token)):
-				for ee in find(e.entities, HMMTOP): ee.spans = []
-				
 	if 'add_tms' in kwargs and kwargs['add_tms']:
 		for tms in kwargs['add_tms']:
 			stms = tms.split(':')
