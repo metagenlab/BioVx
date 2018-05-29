@@ -682,7 +682,7 @@ def main(infiles, **kwargs):
 			entities.append(Region(spans, [y-0.15, 0.15], label, style=color, size=size))
 			#for token in re.split(r':', region): print(token)
 
-	if 'xticks' in kwargs and kwargs['xticks'] is not None: plot.xticks = xticks
+	if 'xticks' in kwargs and kwargs['xticks'] is not None: plot.xticks = kwargs['xticks']
 	else: plot.xticks = None
 
 	if 'bars' in kwargs and kwargs['bars'] is not None: 
