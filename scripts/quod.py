@@ -221,23 +221,24 @@ class Wall(Vspans):
 					plot.ax.scatter([wx], [wy], marker=marker, color='black', s=25*abs(self.wedge))
 
 class HMMTOP(Vspans):
-	def __init__(self, gseq, style='orange', alpha=None, nohmmtop=False):
+	def __init__(self, gseq, style='orange', alpha=None, nohmmtop=False, load=None):
 		Vspans.__init__(self, style=style, alpha=alpha)
 		self.spans = []
 
 		fasta = gseq
 		#no FASTA? no problem
-		if not fasta.strip(): return
 
-		if nohmmtop: indices = []
+		if load is not None:
+			with open(load) as f:
+				indices = self.parse_hmmtop(f.read().decode('utf-8'))
+		elif nohmmtop: indices = []
 		else: 
 			if not fasta.startswith('>'): fasta = '>seq\n' + fasta
 			p = subprocess.Popen(['hmmtop', '-if=--', '-is=pseudo', '-sf=FAS', '-pi=spred'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 			out, err = p.communicate(input=fasta)
 			print(err.strip(), file=sys.stderr)
 
-			indices = re.findall('(?: IN| OUT)((?:\s*(?:[0-9]+))+)', out.strip())[0].strip().split()
-			indices = [int(i) for i in indices[1:]]
+			indices = self.parse_hmmtop(out)
 
 		if not indices: return
 
@@ -252,6 +253,11 @@ class HMMTOP(Vspans):
 				for j, n in enumerate(indices):
 					if (n - 1) >= i: indices[j] += 1
 		self.spans = [[indices[i], indices[i+1]] for i in range(0, len(indices), 2)]
+
+	def parse_hmmtop(self, topout):
+		indices = re.findall('(?: IN| OUT)((?:\s*(?:[0-9]+))+)', topout.strip())[0].strip().split()
+		indices = [int(i) for i in indices[1:]]
+		return indices
 
 	def add(self, *spans):
 		for span in spans: self.spans.append(span)
@@ -506,8 +512,31 @@ def main(infiles, **kwargs):
 	else: color = 'auto'
 
 	no_tms = []
+	if 'load_tms' in kwargs and kwargs['load_tms']:
+		n_id = 0
+		n_loads = 0
+		for token in kwargs['load_tms']:
+			if isid(token): 
+				no_tms.append(parse_id(token))
+				n_id += 1
+			else: 
+				if n_id:
+					if (no_tms[-1] % 3) == 0: style = 'orange'
+					elif (no_tms[-1] % 3) == 1: style = 'cyan'
+					elif (no_tms[-1] % 3) == 2: style = 'purple'
+					else: style = 'orange'
+				else:
+					if (n_loads % 3) == 0: style = 'orange'
+					elif (n_loads % 3) == 1: style = 'cyan'
+					elif (n_loads % 3) == 2: style = 'purple'
+					else: style = 'orange'
+				x = HMMTOP(gseq='', nohmmtop=True, load=token, style=style)
+				entities.append(x)
+				n_loads += 1
+		if n_id == 0: no_tms.append(0)
+
+
 	if 'no_tms' in kwargs and kwargs['no_tms']:
-		target = None
 		for token in kwargs['no_tms']:
 			if not isid(token): raise ValueError('--no-tms: Not an id: "{}"'.format(token))
 			#for e in find(entities, What, parse_id(token)):
@@ -810,6 +839,7 @@ if __name__ == '__main__':
 	parser.add_argument('-at', '--add-tms', metavar='x0-x1(:color)', nargs='+', help='Adds TMSs to plot, e.g. 40-60:red 65-90:blue to add a red TMS covering residues 40 to 60 and a blue one covering residues 65 to 90 (default color: orange)')
 	parser.add_argument('-dt', '--delete-tms', metavar='(+id):x0-x1,x0-x1', nargs='+', help='Deletes TMSs on plot. Use +id to specify which sequence\'s TMSs should be deleted, e.g. "+0:5-25,30-40" to delete overlapping TMSs predicted for the first sequence and "+2:60-80:red,+4:70-95:blue" to delete overlapping TMSs predicted for the third and fifth sequence. +id specification propagates rightward and defaults to +0.')
 	parser.add_argument('-et', '--extend-tms', metavar='(+id):x0-x1(:color)', nargs='+', help='Extends TMSs on plot. Use +id to specify which sequence\'s TMSs should be extended, e.g. "+0:5-25,30-40" to extend TMSs predicted for the first sequence to include residues 5-25 and 30-40 without changing colors and "+2:60-80:red,+4:70-95:blue" to extend TMSs predicted for the third sequence to include residues 60 to 80 and recolor them red and TMSs predicted for the fifth sequence to include residues 70 to 95 and recolor them blue. +id specification propagates rightward and defaults to +0.')
+	parser.add_argument('-lt', '--load-tms', metavar='(+id1) fn1', nargs='+', help='Loads TMS definitions from HMMTOP output stored in a file')
 	parser.add_argument('-nt', '--no-tms', metavar='(+id)', nargs='+', help='Erases all TMSs for specified sequences. Applies early, so other TMS operations will override this effect.')
 	parser.add_argument('-rt', '--replace-tms', metavar='(+id):x0-x1(:color)', nargs='+', help='Replaces TMSs on plot. Use +id to specify which sequence\'s TMSs should be replaced, e.g. "+0:5-25,30-40" to replace overlapping TMSs predicted for the first sequence with new TMSs spanning 5-25 and 30-40 without changing colors and "+2:60-80:red +4:70-95:blue" to replace overlapping TMSs predicted for the third sequence with a new TMS spanning residues 60 to 80 and recolor them red and overlapping TMSs predicted for the fifth sequence with a new TMS spanning residues 70 to 95 and recolor it blue. +id specification propagates rightward and defaults to +0.')
 
@@ -828,5 +858,5 @@ if __name__ == '__main__':
 	#		tms_script += cmd + ' '
 	#tms_script = tms_script.strip()
 
-	main(args.infile, mode=args.mode, walls=args.walls, wall=args.wall, bars=args.bars, dpi=args.r, imgfmt=args.t, force_seq=args.s, outdir=args.d, outfile=args.o, color=args.color, title=args.title, quiet=args.q, viewer=args.a, axis_font=args.axis_font, width=args.width, height=args.height, x_offset=args.x_offset, add_tms=args.add_tms, delete_tms=args.delete_tms, extend_tms=args.extend_tms, replace_tms=args.replace_tms, no_tms=args.no_tms, tick_font=args.tick_font, add_marker=args.add_marker, add_region=args.add_region, xticks=args.xticks)
+	main(args.infile, mode=args.mode, walls=args.walls, wall=args.wall, bars=args.bars, dpi=args.r, imgfmt=args.t, force_seq=args.s, outdir=args.d, outfile=args.o, color=args.color, title=args.title, quiet=args.q, viewer=args.a, axis_font=args.axis_font, width=args.width, height=args.height, x_offset=args.x_offset, add_tms=args.add_tms, delete_tms=args.delete_tms, extend_tms=args.extend_tms, replace_tms=args.replace_tms, no_tms=args.no_tms, tick_font=args.tick_font, add_marker=args.add_marker, add_region=args.add_region, xticks=args.xticks, load_tms=args.load_tms)
 
