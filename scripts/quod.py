@@ -255,6 +255,7 @@ class HMMTOP(Vspans):
 		self.spans = [[indices[i], indices[i+1]] for i in range(0, len(indices), 2)]
 
 	def parse_hmmtop(self, topout):
+		if not topout: return []
 		indices = re.findall('(?: IN| OUT)((?:\s*(?:[0-9]+))+)', topout.strip())[0].strip().split()
 		indices = [int(i) for i in indices[1:]]
 		return indices
