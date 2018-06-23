@@ -16,7 +16,7 @@ The following options are available. You can also run the
 script without arguments to display the options:
 
 
-  -h, --help            show this help message and exit. 
+  -h, --help            show this help message and exit.  
   -if INPUTFILE         The path of the file containing the FASTA sequences 
                         that are to be processed.  
   -od OUTPUTDIR         The path to the directory for the output. If the 
