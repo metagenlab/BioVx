@@ -104,8 +104,8 @@ class Plot(object):
 		maxl = xlim[1] - xlim[0]
 		if self.xticks is None: self.xticks = roundto(maxl // 5, 5)
 
-		self.ax.set_xticks(np.arange(xlim[0], xlim[1]+1, self.xticks))
-		self.ax.set_yticks(np.arange(ylim[0], ylim[1]+1, self.yticks))
+		self.ax.set_xticks(np.arange(xlim[0], xlim[1]+1, max(1, self.xticks)))
+		self.ax.set_yticks(np.arange(ylim[0], ylim[1]+self.yticks, max(0.01, self.yticks)))
 
 		#TODO: allow centimeters or something
 		#if self.width is None: self.width = (0.0265) * (maxl) if maxl > 600 else 15.
@@ -349,6 +349,51 @@ class Entropy(Curve):
 		plot.axeslabels = ['Residue number', 'Entropy (bits)']
 		plot.ax.plot(self.X, self.Y, color=self.style, linewidth=1)
 
+class Psipred(Curve):
+	def __init__(self, pred, style=None, offset=0, window=1):
+		Curve.__init__(self, style=style)
+		self.window = window
+
+		self.parse(pred)
+
+	def parse(self, pred):
+		x = []
+		ycoil = []
+		yhelx = []
+		ystrn = []
+		for l in pred.split('\n'):
+			if not l.strip(): continue
+			elif l.lstrip().startswith('#'): continue
+			elif l.lstrip().startswith('>'): continue
+			sl = l.strip().split()
+			ycoil.append(float(sl[3]))
+			yhelx.append(float(sl[4]))
+			ystrn.append(float(sl[5]))
+			x.append(int(sl[0]))
+
+		if self.window == 1:
+			self.X = np.array(x)
+			self.Ycoil = np.array(ycoil)
+			self.Yhelx = np.array(yhelx)
+			self.Ystrn = np.array(ystrn)
+		else:
+			self.X = np.array(x[self.window//2:len(x)-self.window+self.window//2])
+			self.Ycoil = np.array([np.mean(ycoil[i:i+self.window]) for i, span in enumerate(ycoil[:-self.window])])
+			self.Yhelx = np.array([np.mean(yhelx[i:i+self.window]) for i, span in enumerate(yhelx[:-self.window])])
+			self.Ystrn = np.array([np.mean(ystrn[i:i+self.window]) for i, span in enumerate(ystrn[:-self.window])])
+
+	def draw(self, plot):
+		plot.xlim[0] = min(plot.xlim[0], self.X[0] - self.window//2)
+		plot.xlim[1] = max(plot.xlim[1], self.X[-1] + self.window//2)
+		plot.ylim[0] = 0
+		plot.ylim[1] = 1.0
+		plot.yticks = 0.2
+
+		plot.axeslabels = ['Residue number', 'Confidence']
+		plot.ax.plot(self.X, self.Ycoil, color='g', linewidth=2)
+		plot.ax.plot(self.X, self.Yhelx, color='r', linewidth=2)
+		plot.ax.plot(self.X, self.Ystrn, color='y', linewidth=2)
+
 class Hydropathy(Curve):
 	def __init__(self, gseq, style='r', offset=0, window=19):
 		Curve.__init__(self, style=style)
@@ -434,9 +479,11 @@ class Hydropathy(Curve):
 		plot.ax.plot(self.X, self.Y, color=self.style, linewidth=1)
 
 class What(Entity):
-	def __init__(self, seq, style=0, tmscolor=None, linecolor=None, color=None, nohmmtop=False, entropy=False):
+	def __init__(self, seq, style=0, tmscolor=None, linecolor=None, color=None, nohmmtop=False, mode='hydropathy', window=None, predfile=None):
 		Entity.__init__(self)
-		self.seq = seq
+		if mode == 'psipred': self.seq = self.get_psipred_seq(seq)
+		else: self.seq = seq
+
 		self.style = style
 
 		def choose(*options):
@@ -448,11 +495,28 @@ class What(Entity):
 		self.linecolor = choose(color, linecolor)
 
 		self.entities = []
-		if entropy:
-			self.entities.append(Entropy(seq, style=self.get_curve_color()))
+		if mode == 'entropy':
+			if window is None: self.window = 19
+			else: self.window = window
+			self.entities.append(Entropy(seq, style=self.get_curve_color(), window=self.window))
+		elif mode == 'psipred':
+			if window is None: self.window = 1
+			else: self.window = window
+			self.entities.append(Psipred(seq, style=self.get_curve_color(), window=self.window))
 		else: 
-			self.entities.append(Hydropathy(seq, style=self.get_curve_color()))
-		self.entities.append(HMMTOP(seq, style=self.get_tms_color(), nohmmtop=nohmmtop))
+			if window is None: self.window = 19
+			else: self.window = window
+			self.entities.append(Hydropathy(seq, style=self.get_curve_color(), window=self.window))
+		self.entities.append(HMMTOP(self.seq, style=self.get_tms_color(), nohmmtop=nohmmtop))
+
+	def get_psipred_seq(self, seq):
+		s = ''
+	 	for l in seq.split('\n'): 
+			if not l.strip(): continue
+			elif l.lstrip().startswith('#'): continue
+			elif l.lstrip().startswith('>'): s += '\n'+ l.strip() + '\n'
+			else: s += l.strip().split()[1]
+		return s.strip()
 
 	def get_title(self, showlength=True):
 		if self.seq.startswith('>'): 
@@ -572,8 +636,16 @@ def main(infiles, **kwargs):
 				n_loads += 1
 		if n_id == 0: no_tms.append(0)
 
-	if 'entropy' in kwargs and kwargs['entropy']: entropy = True
-	else: entropy = False
+	#if 'entropy' in kwargs and kwargs['entropy']: entropy = True
+	#else: entropy = False
+	if 'mode' in kwargs:
+		if kwargs['mode'] == 'entropy': mode = 'entropy'
+		elif kwargs['mode'] == 'psipred': mode = 'psipred'
+		else: mode = 'hydropathy'
+	else: mode = 'hydropathy'
+
+	if 'window' in kwargs and kwargs['window'] is not None: window = kwargs['window']
+	else: window = 19
 
 	if 'no_tms' in kwargs and kwargs['no_tms']:
 		for token in kwargs['no_tms']:
@@ -587,8 +659,12 @@ def main(infiles, **kwargs):
 		for seq in infiles: 
 			if n in no_tms: nohmmtop = 1
 			else: nohmmtop = 0
-			if color == 'auto': entities.append(What(seq, style=n, nohmmtop=nohmmtop, entropy=entropy))
-			else: entities.append(What(seq, color=color, nohmmtop=nohmmtop, entropy=entropy))
+			whatkwargs = {'nohmmtop':nohmmtop, 'window':window}
+			if color == 'auto': whatkwargs['style'] = n
+			else: whatkwargs['color'] = color
+			if mode == 'entropy': whatkwargs['mode'] = 'entropy'
+			elif mode == 'psipred': whatkwargs['mode'] = 'psipred'
+			entities.append(What(seq, **whatkwargs))
 			n += 1
 	else:
 		for fn in infiles:
@@ -596,8 +672,12 @@ def main(infiles, **kwargs):
 				for seq in split_fasta(f.read().decode('utf-8')):
 					if n in no_tms: nohmmtop = 1
 					else: nohmmtop = 0
-					if color == 'auto': entities.append(What(seq, style=n, nohmmtop=nohmmtop, entropy=entropy))
-					else: entities.append(What(seq, color=color, nohmmtop=nohmmtop, entropy=entropy))
+					whatkwargs = {'nohmmtop':nohmmtop, 'window':window}
+					if color == 'auto': whatkwargs['style'] = n
+					else: whatkwargs['color'] = color
+					if mode == 'entropy': whatkwargs['mode'] = 'entropy'
+					elif mode == 'psipred': whatkwargs['mode'] = 'psipred'
+					entities.append(What(seq, **whatkwargs))
 					n += 1
 
 	if 'add_tms' in kwargs and kwargs['add_tms']:
@@ -857,6 +937,7 @@ if __name__ == '__main__':
 	parser.add_argument('-q', action='store_true', help='"quiet" mode, disables automatic opening of graphs')
 	parser.add_argument('-r', metavar='resolution', type=int, help='Resolution of graph in dpi. The default is 80dpi, which is suitable for viewing on monitors. Draft-quality images should be about 300dpi, and publication-quality images need to be 600 or 1200dpi depending on the journal.')
 	parser.add_argument('-s', action='store_true', help='Force inputs to be interpreted as sequences (this is no longer a default behavior for infile args matching /[A-Z]+/')
+	parser.add_argument('-sp', action='store_true', help='Force inputs to be interpreted as PSIPRED predictions')
 	parser.add_argument('-t', metavar='format', default='png', help='Format of graph (\033[1mpng\033[0m, eps, jpeg, jpg, pdf, pgf, ps, raw, rgba, svg, svgz, tif, tiff')
 	parser.add_argument('-v', action='store_true', help='Verbose output. Enables warnings and generally makes things messier')
 	parser.add_argument('-w', '--walls', metavar='x(,dx(,y))', nargs='+', help='Draws bounds around sequences and such')
@@ -867,7 +948,7 @@ if __name__ == '__main__':
 	parser.add_argument('--tick-font', metavar='size', type=int, help='Tick label size')
 	parser.add_argument('--viewer', metavar='viewer', default=None, help='Viewer to be used for opening plots')
 	parser.add_argument('--width', metavar='width', type=float, help='Plot width in inches (default:dynamic)')
-	parser.add_argument('--window', metavar='windowsize', default=19, help='Window size for hydropathy')
+	parser.add_argument('--window', metavar='windowsize', type=int, default=19, help='Window size for hydropathy')
 	parser.add_argument('--x-offset', metavar='init_resi', default=0, type=int, help='Sets starting x-value')
 	parser.add_argument('--xticks', default=None, type=int, help='X tick spacing')
 
@@ -897,5 +978,9 @@ if __name__ == '__main__':
 	#		tms_script += cmd + ' '
 	#tms_script = tms_script.strip()
 
-	main(args.infile, mode=args.mode, walls=args.walls, wall=args.wall, bars=args.bars, dpi=args.r, imgfmt=args.t, force_seq=args.s, outdir=args.d, outfile=args.o, color=args.color, title=args.title, quiet=args.q, viewer=args.a, axis_font=args.axis_font, width=args.width, height=args.height, x_offset=args.x_offset, add_tms=args.add_tms, delete_tms=args.delete_tms, extend_tms=args.extend_tms, replace_tms=args.replace_tms, no_tms=args.no_tms, tick_font=args.tick_font, add_marker=args.add_marker, add_region=args.add_region, xticks=args.xticks, load_tms=args.load_tms, entropy=args.entropy)
+	mode = args.mode
+	if args.entropy: mode = 'entropy'
+	elif args.sp: mode = 'psipred'
+
+	main(args.infile, mode=mode, walls=args.walls, wall=args.wall, bars=args.bars, dpi=args.r, imgfmt=args.t, force_seq=args.s, outdir=args.d, outfile=args.o, color=args.color, title=args.title, quiet=args.q, viewer=args.a, axis_font=args.axis_font, width=args.width, height=args.height, x_offset=args.x_offset, add_tms=args.add_tms, delete_tms=args.delete_tms, extend_tms=args.extend_tms, replace_tms=args.replace_tms, no_tms=args.no_tms, tick_font=args.tick_font, add_marker=args.add_marker, add_region=args.add_region, xticks=args.xticks, load_tms=args.load_tms, entropy=args.entropy, window=args.window)
 

@@ -33,12 +33,12 @@ class Tools:
         self.goodresults  = []
         self.bestresults  = []
         self.notmsresults = []
-	self.substrates = {}
+        self.substrates = {}
         self.debug=True
         self.tms = {}
         self.expect = 0.001
         self.minlen = 50
-	self.mincov = 40.0
+        self.mincov = 40.0
         self.myqueries = False
         self.mytcdb = False
         self.rows = []
@@ -49,15 +49,15 @@ class Tools:
         self.ortho = False
         self.query_gis = False
         self.target_gis = False
-	self.esort = False
+        self.esort = False
         self.alabel = 'Query'
         self.blabel = 'TCDB-Hit'
         self.names  = tcdb.Names()
-	self.loadSubstrates()
+        self.loadSubstrates()
 
-	#Sequence dictionaries
-	self.queries = {}
-	self.tcdbHits = {}	
+        #Sequence dictionaries
+        self.queries = {}
+        self.tcdbHits = {}        
 
         #self.substrates = tcdb.Substrates()
         tcdb.use_local()
@@ -85,7 +85,7 @@ class Tools:
                 evalue=self.expect,
                 out=blast_out,
                 outfmt=5,
-		comp_based_stats='0'
+                comp_based_stats='0'
             )
             blastp()
             print "Blasted :: %s" %query.id
@@ -143,37 +143,37 @@ class Tools:
                         hsp = hsps[0]
 
 
-			if not blast.query_length:
-				print('No Query Length')	
-				print(vars(blast))
+                        if not blast.query_length:
+                                print('No Query Length')        
+                                print(vars(blast))
 
-			if not record[1].length:
+                        if not record[1].length:
 
-				print('No hit length')
-				print(vars(record[1]))
+                                print('No hit length')
+                                print(vars(record[1]))
 
-			q_len = blast.query_length
-			h_len = record[1].length
+                        q_len = blast.query_length
+                        h_len = record[1].length
 
-			qcov = float('%.1f'%(((hsp.query_end-hsp.query_start)/float(q_len))*100))
-			hcov = float('%.1f'%(((hsp.sbjct_end-hsp.sbjct_start)/float(h_len))*100))
+                        qcov = float('%.1f'%(((hsp.query_end-hsp.query_start)/float(q_len))*100))
+                        hcov = float('%.1f'%(((hsp.sbjct_end-hsp.sbjct_start)/float(h_len))*100))
 
-			if qcov >= 100:
-		
-				qcov = 100.0
-			
-			if hcov >= 100:
+                        if qcov >= 100:
+                
+                                qcov = 100.0
+                        
+                        if hcov >= 100:
 
-				hcov = 100.0
+                                hcov = 100.0
 
                         
-			if record[0].e > self.expect or len(hsp.match) < self.minlen:
-				continue
-			
+                        if record[0].e > self.expect or len(hsp.match) < self.minlen:
+                                continue
+                        
 
-			if qcov >= self.mincov or hcov >= self.mincov:
+                        if qcov >= self.mincov or hcov >= self.mincov:
 
-                        	rez.append((query,record,hsp,q_len,h_len,qcov,hcov)) # (genome ID, hit record <e,title>, hit.hsp)
+                                rez.append((query,record,hsp,q_len,h_len,qcov,hcov)) # (genome ID, hit record <e,title>, hit.hsp)
                     except:
                         pass
             except:
@@ -189,23 +189,28 @@ class Tools:
         self.tcdbHits = nr_dict(tcdb)
         queries= SeqIO.parse(self.query,'fasta')
         self.queries= SeqIO.to_dict(queries)
+        ##### gabo's addition
+        done = dict()
         for query,hit,hsp,q_len,h_len,qcov,hcov in self.goodresults:
             hit = hit[0]
             query=ParseDefline(query).id
             myquery.append(self.queries[str(query)])
-            try:
-                mytcdb.append(self.tcdbHits[ParseDefline(hit.title,True).id])
-            except:
-                (family,tcid,acc) = ParseTC(hit.title)
-                #print tcid,acc
-                print ParseDefline(hit.title,True).id
-                #print hit.title
-                quit()
+            subject = ParseDefline(hit.title,True).id
+            if subject not in done.keys():
+                done[subject] = 1
+                try:
+                    mytcdb.append(self.tcdbHits[subject])
+                except:
+                    (family,tcid,acc) = ParseTC(hit.title)
+                    #print tcid,acc
+                    print ParseDefline(hit.title,True).id
+                    #print hit.title
+                    quit()
 
         query_file=open(self.indir+"/myqueries.faa",'wb')
         tcdb_file=open(self.indir+"/mytcdb.faa",'wb')
-        SeqIO.write(list(set(myquery)),query_file,'fasta')
-        SeqIO.write(list(set(mytcdb)),tcdb_file,'fasta')
+        SeqIO.write(myquery,query_file,'fasta')
+        SeqIO.write(mytcdb,tcdb_file,'fasta')
 
     def hmmtop(self):
         db = self.indir+'/hmmtop.db'
@@ -240,15 +245,15 @@ class Tools:
             row= (genome,tcdb,hsp,q_len,h_len,qcov,hcov,overlap)
             self.bestresults.append(row)
 
-	if self.esort:
+        if self.esort:
 
-		self.bestresults.sort(key=lambda x:(x[1].e,x[7],self.tcsort(x[1].title)))
-        	self.notmsresults.sort(key=lambda x:(x[1].e,self.tcsort(x[1].title)))
+                self.bestresults.sort(key=lambda x:(x[1].e,x[7],self.tcsort(x[1].title)))
+                self.notmsresults.sort(key=lambda x:(x[1].e,self.tcsort(x[1].title)))
 
-	else:
+        else:
 
-		self.bestresults.sort(key=lambda x:(self.tcsort(x[1].title),x[1].e,-1.0*max(x[6],x[5])))
-		self.notmsresults.sort(key=lambda x:(self.tcsort(x[1].title),x[1].e,-1.0*max(x[6],x[5])))	
+                self.bestresults.sort(key=lambda x:(self.tcsort(x[1].title),x[1].e,-1.0*max(x[6],x[5])))
+                self.notmsresults.sort(key=lambda x:(self.tcsort(x[1].title),x[1].e,-1.0*max(x[6],x[5])))        
 
 
 
@@ -328,7 +333,7 @@ class Tools:
         '''
         ident = round((float(hsp.identities)/len(hsp.match))*100)
 
-	'''
+        '''
         substrate_info= self.substrates.get_tcid_substrates(tcid)
         mysubstrate_html = ''
         mysubstrate_tsv = ''
@@ -352,17 +357,17 @@ class Tools:
         
             mysubstrate_html = 'None'
             mysubstrate_tsv = 'None'
-	'''
+        '''
 
-	substrate = ''
+        substrate = ''
 
-	try:
+        try:
 
-	    substrate = self.substrates[tcid]
+            substrate = self.substrates[tcid]
 
-	except:
+        except:
 
-	    substrate = 'None'
+            substrate = 'None'
 
         '''
         html_results (VI)
@@ -384,11 +389,11 @@ class Tools:
         row =[str(i) for i in row]
         txtrow = "%s\n"%("\t".join(row))
 
-	'''
-	content results (VI)
-	'''
+        '''
+        content results (VI)
+        '''
 
-	self.plotHydro(genome,tcdb,acc,hsp)
+        self.plotHydro(genome,tcdb,acc,hsp)
 
         #self.rows.append(htmlrow)
         if self.cdd_on is True:
@@ -399,8 +404,8 @@ class Tools:
         content = '''<div class='result' id='%s'> <h3><a name='%s'>%s</a></h3>  <p>Hit Accession: %s<br>   Hit TCID: %s</p> <p>Hit Description: %s<br>
         <br>   Mach Len: %i<br>   e:%f</p> <p>Query TMS Count : %i<br>   Hit TMS Count: %i     <br>     TMS-Overlap Score: %f<br>
         Predicted Substrates:%s <br><br>     BLAST Alignment:<br>     <pre>     %s     </pre> <br>  <table><tr><th>Protein Hydropathy Plots:</th></tr> 
-	<tr><td><img src='img/%s_hydro.png'></td> <td><img src='img/%s-%s_hydro.png'></td></tr><br>
-	<tr><th><br> Pairwise Alignment-Hydropathy Plot:<br></th></tr>
+        <tr><td><img src='img/%s_hydro.png'></td> <td><img src='img/%s-%s_hydro.png'></td></tr><br>
+        <tr><th><br> Pairwise Alignment-Hydropathy Plot:<br></th></tr>
         <tr><td colspan="2" style="text-align: center;"><img src='img/%s.png'></td></tr></table><br>%s </p> </div>\n''' %(genome,genome,genome,acc,tcid,tcdb.title,\
         len(hsp.match),tcdb.e,query_tms,hit_tms,ol,substrate,str(hsp),genome,acc,genome,urlencode(genome),mycdd)
         #self.data.append(content)
@@ -461,20 +466,20 @@ class Tools:
 
     def loadSubstrates(self):
 
-	print('Loading Substrates')
+        print('Loading Substrates')
 
-	substrateData = urlopen('http://tcdb.org/cgi-bin/projectv/getSubstrates.py')
-
-
-	for line in substrateData:
-
-	    data = line.replace('\n','').split('\t')
-	    #print(data)
-	    self.substrates[data[0]] = data[1].replace('|',', ')
+        substrateData = urlopen('http://tcdb.org/cgi-bin/projectv/getSubstrates.py')
 
 
-	return
-		 	
+        for line in substrateData:
+
+            data = line.replace('\n','').split('\t')
+            #print(data)
+            self.substrates[data[0]] = data[1].replace('|',', ')
+
+
+        return
+                         
 
     def cdd_extract(self):
         if os.path.exists(self.indir+'/cdd') is False:
@@ -493,33 +498,33 @@ class Tools:
 
     def plotHydro(self,genome,hit,acc,hsp):
 
-	#File Paths
+        #File Paths
 
-	queryPath = self.indir+'/img/'+genome+'_hydro.png'
-	hitPath = self.indir+'/img/'+acc+'-'+genome+'_hydro.png'
+        queryPath = self.indir+'/img/'+genome+'_hydro.png'
+        hitPath = self.indir+'/img/'+acc+'-'+genome+'_hydro.png'
 
-	quod = ' -s -q -d {} --width 15 '.format(self.indir+"/img/")
+        quod = ' -s -q -d {} --width 10 --height 3 '.format(self.indir+"/img/")
 
 
-	#Query Hydropathy
-	if not os.path.exists(queryPath):
+        #Query Hydropathy
+        if not os.path.exists(queryPath):
 
-	    query=ParseDefline(genome).id
-	    querySeq = self.queries[str(query)].seq
-	    query = 'quod.py {} -o {} -c blue -W {},1 {},-1 -l {}'.format(querySeq,genome+'_hydro.png',hsp.query_start,hsp.query_end,genome) + quod
+            query=ParseDefline(genome).id
+            querySeq = self.queries[str(query)].seq
+            query = 'quod.py {} -o {} -c blue -w {},{},0 -l {}'.format(querySeq,genome+'_hydro',hsp.query_start,hsp.query_end,genome) + quod
 
-	    #os.system(query)
-	    subprocess.call(query.split())
+            #os.system(query)
+            subprocess.call(query.split())
 
-	#Hit Hydropathy
-	if not os.path.exists(hitPath):
-	
-	    hitID = ParseDefline(hit.title,True).id
-	    hitSeq = self.tcdbHits[str(hitID)].seq
-	    hit = 'quod.py {} -o {} -c red -W {},1 {},-1 -l {}'.format(hitSeq, acc+'-'+genome+'_hydro.png',hsp.sbjct_start,hsp.sbjct_end,acc) + quod
+        #Hit Hydropathy
+        if not os.path.exists(hitPath):
+        
+            hitID = ParseDefline(hit.title,True).id
+            hitSeq = self.tcdbHits[str(hitID)].seq
+            hit = 'quod.py {} -o {} -c red -w {},{},0 -l {}'.format(hitSeq, acc+'-'+genome+'_hydro',hsp.sbjct_start,hsp.sbjct_end,acc) + quod
 
-	    #os.system(hit)
-	    subprocess.call(hit.split())
+            #os.system(hit)
+            subprocess.call(hit.split())
 
 
     def hydro(self,gseq):
@@ -603,8 +608,8 @@ class Tools:
         plt.xlim(right=len(a))
         plt.plot(x_data,ha,linewidth=1,label=self.alabel,color='blue')
         plt.plot(x_data,hb,linewidth=1,label=self.blabel,color='red')
-        plt.xlabel("Residue #")
-        plt.ylabel("Hydro")
+        plt.xlabel("Residue")
+        plt.ylabel("Hydropathy (kcal/mol)")
         plt.legend(loc='lower right')
         # Draw TMS bars
         if len(hmt) == 2:
@@ -621,9 +626,10 @@ class Tools:
                     subtract = tms.end()-len(hb)
                 plt.axvspan(tms.start()-subtract,tms.end()-subtract, facecolor="red", alpha=0.3)
         fig = matplotlib.pyplot.gcf()
-        fig.set_size_inches(15,3)
-        plt.savefig(outfile, dpi=80, format="png",bbox_inches='tight', pad_inches=0.003)
+        fig.set_size_inches(10,3)
+        plt.savefig(outfile, dpi=100, format="png",bbox_inches='tight', pad_inches=0.003)
         plt.clf()
+        plt.close(fig)
 
 
 
@@ -652,17 +658,17 @@ if __name__=="__main__":
                     help="Minimum e-Value [0.001]"
     )
     opts.add_option('--cov',
-		    action='store',
-		    type='float',
-		    dest='mincov',
-		    default=40.0,
-		    help="Minimum Proten Coverage [40.0]"
+                    action='store',
+                    type='float',
+                    dest='mincov',
+                    default=40.0,
+                    help="Minimum Proten Coverage [40.0]"
     )
     opts.add_option('--esort',
-		    action='store_true',
-		    dest='esort',
-		    default=False,
-		    help="Use e-value as the preliminary criteria for sorting (otherwise sorted by TCID)"
+                    action='store_true',
+                    dest='esort',
+                    default=False,
+                    help="Use e-value as the preliminary criteria for sorting (otherwise sorted by TCID)"
     )
     '''    
     opts.add_option('--betabarrel',
@@ -708,8 +714,8 @@ if __name__=="__main__":
         GB.query_gis  = False
         GB.target_gis = False
         GB.expect = cli.evalue
-	GB.mincov = cli.mincov
-	GB.esort=cli.esort
+        GB.mincov = cli.mincov
+        GB.esort=cli.esort
         GB.blast_all()
         print "Loading BLAST results"
         GB.load_good()
