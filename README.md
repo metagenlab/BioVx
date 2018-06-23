@@ -14,7 +14,7 @@ Find below the list of programs available. Scripts developed by our group as dep
 **8.** ancient.py    ([Manual](manuals/AR_INSTRUCTIONS.pdf))   
 **9.** quod.py       ([Manual](https://github.com//khendarg/hvordan/blob/master/docs/quod.md))  
 **10.** hvordan.py   ([Manual](https://github.com/khendarg/hvordan/blob/master/docs/hvordan.md))  
-**11.** tmsplit.py  
+**11.** tmsplit.py   ([Manual](manuals/tmsplit.md))
 
 ---  
 
@@ -22,8 +22,8 @@ Find below the list of programs available. Scripts developed by our group as dep
 The BioV manual needs to be updated.  
 
 * **Note 2:**  
-Some modifications to protocol 2 and other programs
-by Gabriel Moreno-Hagelsieb.   
+Some improvements to protocol 2 and other programs
+were introduced by Gabriel Moreno-Hagelsieb.   
 
 * **Note 3:**  
 Pranav Iddamsetty and Arturo Medrano added the scripts
@@ -33,14 +33,8 @@ under the same criteria as the website:
 http://biotools.tcdb.org/bartms_split.html  
 
 * **Note 4:**  
-The program _gblast3.py_ was modified by Pranav Iddamsetty 
-and Arturo Medrano to generate a tabulated file 
-(_results.tsv_) with the same output as _results.html_. This 
-will allow further automatic processing of gblast output 
-(e.g. compare different outputs of gblast to identify 
-commonalities/differences between trasporter systems in 
-different genomes). This program was also modified to add 
-annotated substrates in tcdb to the output.   
+The program _gblast3.py_ was improved by Pranav Iddamsetty 
+Gabriel Moreno-Hagelsieb and Arturo Medrano.   
 
 * **Note 5:**  
 The programs _quod.py_, _tcblast.py_ and _hvordan.py_ were added 
