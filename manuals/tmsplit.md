@@ -15,6 +15,7 @@ This module is part of the distribution.
 The following options are available. You can also run the 
 script without arguments to display the options:
 
+
   -h, --help            show this help message and exit. 
   -if INPUTFILE         The path of the file containing the FASTA sequences 
                         that are to be processed.  
