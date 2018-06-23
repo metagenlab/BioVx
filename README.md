@@ -40,10 +40,7 @@ will allow further automatic processing of gblast output
 (e.g. compare different outputs of gblast to identify 
 commonalities/differences between trasporter systems in 
 different genomes). This program was also modified to add 
-annotated substrates in tcdb to the output. Currently the 
-substrates are read from flat files but as soon as the 
-substrates are uploaded to TCDB we will modify the script 
-to read the substrates directly from the database.  
+annotated substrates in tcdb to the output.   
 
 * **Note 5:**  
 The programs _quod.py_, _tcblast.py_ and _hvordan.py_ were added 
