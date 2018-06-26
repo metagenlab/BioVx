@@ -1,6 +1,8 @@
 # Documentation for script: _compareGblast.py_
 
 ## Summary
+When using _GBlast_ to identify potential transport proteins in many genomes, a comparison
+between the outputs of _GBlast_ may yield some insight into potential relationships between organisms.
 This program compares multiple outputs of _GBlast_ and generates a tab-seperated table
 summarizing the best hits from each _GBlast_ output for each TCDB protein.
 
@@ -14,7 +16,7 @@ recent versions of Python.
 
 
 ## Command Line Options
-The following options are required for the program to run properly.
+The following options are required for the program to run properly:
 
     positional arguments:
       files                 A space seperated list of paths to the relevant GBLAST
