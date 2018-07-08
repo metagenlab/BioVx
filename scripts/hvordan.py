@@ -24,14 +24,18 @@ DEBUG = 0
 VERBOSITY = 1
 
 def warn(*msgs):
+	''' prints warnings so that debug prints are more greppable '''
 	for l in msgs: print('[WARNING]', l, file=sys.stderr)
 def error(*msgs):
+	''' prints error messages and exits with return code 1 '''
 	for l in msgs: print('[ERROR]', l, file=sys.stderr)
-	exit()
+	exit(1)
 def info(*msgs):
+	''' prints info messages '''
 	for l in msgs: print('[INFO]', l, file=sys.stderr)
 
 def fetch(accessions, email=None, db='protein'):
+	''' grabs PDBs from locally installed TCDB BLAST databases, I'm pretty sure '''
 	if not accessions: return ''
 	if db == 'tcdb':
 		out = ''
@@ -82,6 +86,7 @@ def fetch(accessions, email=None, db='protein'):
 	if DEBUG: info('Done fetching a batch from %s' % db)
 
 def parse_p2report(p2report, minz=15, maxz=None, musthave=None, thispair=None):
+	''' parses Protocol2 TSV reports '''
 
 	if musthave and thispair: error('Arguments musthave and thispair are not mutually compatible')
 
@@ -125,6 +130,7 @@ def parse_p2report(p2report, minz=15, maxz=None, musthave=None, thispair=None):
 	return fams, bcs, alnregs, stats
 
 def seek_initial(p1ds, bcs):
+	''' Grabs detailed hit information '''
 	hits = {}
 	for fam in sorted(bcs):
 		hits[fam] = {}
@@ -136,7 +142,7 @@ def seek_initial(p1ds, bcs):
 		if os.path.isfile(p1d):
 				#fs[bc] = p1d
 
-			#this is indeed a xor/xnor case, but that may be wrong for some directory naming schemes
+			#this is indeed an xor/xnor case, but that may be wrong for some directory naming schemes
 			if fams[0] in p1d and fams[1] in p1d: 
 				for bc in fams: fs[bc] = p1d
 			elif fams[0] in p1d: fs[fams[0]] = p1d
@@ -174,10 +180,12 @@ def seek_initial(p1ds, bcs):
 
 	for fam in sorted(bcs):
 		for bc in sorted(hits[fam]): 
-			hits[fam][bc] = sorted(hits[fam][bc])[0]
+			try: hits[fam][bc] = sorted(hits[fam][bc])[0]
+			except IndexError: error('Could not find any hits for {}/{}: Was psiblast.tbl deleted?'.format(fam, bc))
 	return hits
 
 def clean_fetch(accs, outdir, force=False, email=None):
+	''' also fetches sequences but different? '''
 	if DEBUG: info('Fetching %s' % accs)
 	if not force:
 		removeme = []
@@ -235,6 +243,7 @@ def clean_fetch(accs, outdir, force=False, email=None):
 	#	f.close()
 
 def quod_set(seqids, sequences, indir, outdir, dpi=300, force=False, bars=[], prefix='', suffix='', silent=False, pars=[]):
+	''' generates QUOD plots for batches of sequences '''
 	if not os.path.isdir(outdir): os.mkdir(outdir)
 
 	#wedges = [[[x, 2 * (0.5 - (i % 2))] for i, x in enumerate(span)] for span in bars]
@@ -244,33 +253,31 @@ def quod_set(seqids, sequences, indir, outdir, dpi=300, force=False, bars=[], pr
 	wedges = []
 	for i, span in enumerate(bars):
 		wedges.append([])
-		for j, x in enumerate(span):
-			#wedges.append(quod.Wedge(
-			if 1 <= i <= 2: y = -2
-			else: y = 0
-			wedges[-1].append(quod.Wedge(x=x, dx=ove(j), y=y))
+		if 1 <= i <= 2: y = -2
+		else: y = -2
+		wedges[-1].append(quod.Wall(spans=[span], y=y, ylim=[0,0.5]))
 
 	medges = []
 	for i, span in enumerate(pars):
 		medges.append([])
-		for j, x in enumerate(span):
-			y = 2
-			medges[-1].append(quod.Wedge(x=x, dx=ove(j), y=y))
+		y = 2
+		medges[-1].append(quod.Wall(spans=[span], y=y, ylim=[0.5,1]))
 
 	#Draw A: barred by B
-	quod.what([sequences[seqids[0]]], title=seqids[0], imgfmt='png', directory=outdir, filename=(seqids[0] + '_' + seqids[1] + '.png'), dpi=dpi, hide=1, bars=bars[0], wedges=wedges[0], silent=silent, width=15, height=3)
+	quod.what([sequences[seqids[0]]], force_seq=True, title=seqids[0], imgfmt='png', outdir=outdir, outfile=(seqids[0] + '_' + seqids[1] + '.png'), dpi=dpi, hide=1, entities=wedges[0], silent=True, width=15, height=3)
 
 	#Draw B: barred by C
-	quod.what([sequences[seqids[1]]], title=seqids[1], imgfmt='png', directory=outdir, filename=(seqids[1] + '_' + seqids[2] + '.png'), dpi=dpi, hide=1, bars=bars[1], wedges=wedges[1]+medges[0], silent=True, width=15, height=3)
+	quod.what([sequences[seqids[1]]], force_seq=True, title=seqids[1], imgfmt='png', outdir=outdir, outfile=(seqids[1] + '_' + seqids[2] + '.png'), dpi=dpi, hide=1, entities=wedges[1]+medges[0], silent=True, width=15, height=3)
 
 	#Draw C: barred by B
-	quod.what([sequences[seqids[2]]], title=seqids[2], imgfmt='png', directory=outdir, filename=(seqids[2] + '_' + seqids[1] + '.png'), dpi=dpi, hide=1, bars=bars[2], color=1, wedges=wedges[2]+medges[1], silent=True, width=15, height=3)
+	quod.what([sequences[seqids[2]]], force_seq=True, title=seqids[2], imgfmt='png', outdir=outdir, outfile=(seqids[2] + '_' + seqids[1] + '.png'), dpi=dpi, hide=1, color=1, entities=wedges[2]+medges[1], silent=True, width=15, height=3)
 
 	#Draw D: barred by C
-	quod.what([sequences[seqids[3]]], title=seqids[3], imgfmt='png', directory=outdir, filename=(seqids[3] + '_' + seqids[2] + '.png'), dpi=dpi, hide=1, bars=bars[3], color=1, wedges=wedges[3], silent=True, width=15, height=3)
+	quod.what([sequences[seqids[3]]], force_seq=True, title=seqids[3], imgfmt='png', outdir=outdir, outfile=(seqids[3] + '_' + seqids[2] + '.png'), dpi=dpi, hide=1, color=1, entities=wedges[3], silent=True, width=15, height=3)
 
 
 def build_html(bc, indir, blasts, outdir='hvordan_out/html', filename='test.html', lastpair=None, nextpair=None):
+	''' build an HTML report '''
 
 	if not os.path.isdir(outdir): os.mkdir(outdir)
 	if not os.path.isdir(outdir + '/assets'): os.mkdir(outdir + '/assets')
@@ -368,6 +375,7 @@ def build_html(bc, indir, blasts, outdir='hvordan_out/html', filename='test.html
 	f.close()
 
 def get_fulltrans(fams, bcs, abcd):
+	''' collect A, B, C, and D into one convenient data structure '''
 
 	pairs = zip(bcs[fams[0]], bcs[fams[1]])
 	origs = [abcd[fams[0]], abcd[fams[1]]]
@@ -378,6 +386,7 @@ def get_fulltrans(fams, bcs, abcd):
 	return fulltrans
 
 def blastem(acc, indir, outdir, dpi=300, force=False, seqbank={}, tmcount={}, maxhits=50):
+	''' generates TCBLAST plots '''
 	f = open(indir + '/sequences/' + acc + '.fa')
 	seq= f.read()
 	f.close()
@@ -390,6 +399,7 @@ def blastem(acc, indir, outdir, dpi=300, force=False, seqbank={}, tmcount={}, ma
 	#blasts = [tcblast.til_warum(l[0], args.o + '/images/' + accs[0] + '.png', dpi=args.r, html=2, outdir=args.o + '/hmmtop'), tcblast.til_warum(l[1], args.o + '/images/' + accs[1] + '.png', dpi=args.r, html=2, outdir=args.o + '/hmmtop')]
 
 def identifind(seq1, seq2):
+	''' obtains qstart, qend, sstart, send '''
 	#Seq1 = Bio.Seq.Seq(seq1, Bio.Alphabet.ProteinAlphabet())
 	if seq1.startswith('>'): seq1 = seq1[seq1.find('\n')+1:]
 	if seq2.startswith('>'): seq2 = seq2[seq2.find('\n')+1:]
@@ -473,6 +483,7 @@ def identifind(seq1, seq2):
 		#I prefer 0-indexing, but pretty much everyone 1-indexes (at least for protein sequences)
 
 def ggsearch(seq1, seq2):
+	''' runs ssearch '''
 	if not seq1.startswith('>'): seq1 = '>seq1\n' + seq1
 	if not seq2.startswith('>'): seq2 = '>seq2\n' + seq2
 
@@ -507,6 +518,7 @@ def ggsearch(seq1, seq2):
 
 
 def summarize(p1d, p2d, outdir, minz=15, maxz=None, dpi=100, force=False, email=None, musthave=None, thispair=None, fams=None, maxhits=50):
+	''' summarize stuff '''
 	if thispair is not None:
 		if len(thispair) % 2: error('Unpaired sequence found')
 		else:
@@ -634,7 +646,7 @@ def summarize(p1d, p2d, outdir, minz=15, maxz=None, dpi=100, force=False, email=
 	#make graphs for all pairs of sequences
 	for s1 in alnregs: 
 		for s2 in alnregs[s1]: 
-			quod.what(alnregs[s1][s2], labels=[s1,s2], title='%s (red) vs %s (blue)' % (s1,s2), imgfmt='png', directory=outdir+'/graphs', filename='%s_vs_%s.png' % (s1,s2), dpi=dpi, hide=1)
+			quod.what(alnregs[s1][s2], force_seq=True, labels=[s1,s2], title='%s (red) vs %s (blue)' % (s1,s2), imgfmt='png', outdir=outdir+'/graphs', outfile='%s_vs_%s.png' % (s1,s2), dpi=dpi, hide=1, width=30, height=3)
 
 	if VERBOSITY: info('Generating TCBLAST plots')
 	blasts = {}

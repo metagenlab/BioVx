@@ -14,10 +14,12 @@ from Bio import SeqIO
 VERBOSITY = 0
 
 def isspans(token):
+	''' checks if a token is a span/range '''
 	if re.match(r'^[0-9]+(?:-[0-9]+)(?:,[0-9]+(?:-[0-9]+))*$', token): return True
 	else: return False
 
 def parse_spans(token):
+	''' parses a token as a set of spans '''
 	spans = []
 	for span in token.split(','):
 		indices = span.split('-')
@@ -27,33 +29,43 @@ def parse_spans(token):
 	return spans
 
 def isid(token):
+	''' checks if a token is an ID '''
 	if re.match('^\+[0-9]+$', token): return True
 	else: return False
 
 def parse_id(token):
+	''' parses an ID '''
 	if isid(token): return int(token)
 	else: return None
 
 def isint(token):
+	''' checks if something is an int '''
 	try:
 		int(token)
 		return True
 	except ValueError: return False
 
 def isfloat(token):
+	''' checks if something is a float '''
 	try:
 		float(token)
 		return True
 	except ValueError: return False
 
-def warn(*args): print('[WARNING]:', *args, file=sys.stderr)
+def warn(*args): 
+	''' prints a warning '''
+	print('[WARNING]:', *args, file=sys.stderr)
 
-def sanitize(s): return re.sub('/', '', s)
+def sanitize(s): 
+	''' removes forslashes to generate UNIX-compatible filenames '''
+	return re.sub('/', '', s)
 
-def roundto(x, n):
-	return (x//5)*5
+def roundto(x, n=5):
+	''' round to the next lowest multiple of n '''
+	return (x//n)*n
 
 def overlap(span1, span2):
+	''' checks if two spans overlap '''
 	if span1[0] <= span2[0] <= span1[-1]: return True
 	elif span1[0] <= span2[1] <= span1[-1]: return True
 	elif span2[0] <= span1[0] <= span2[-1]: return True
@@ -61,10 +73,12 @@ def overlap(span1, span2):
 	else: return False
 
 def union(span1, span2):
+	''' produces unions of contiguous/intersecting spans '''
 	if not overlap(span1, span2): raise NotImplementedError
 	else: return [min(span1[0], span2[0]), max(span1[-1], span2[-1])]
 
 def hex2tuple(s):
+	''' turns hexes into tuples '''
 	if s.startswith('#'): s = s[1:]
 	elif s.startswith('0x'): s = s[2:]
 
@@ -75,9 +89,14 @@ def hex2tuple(s):
 	return tuple(l)
 
 class Plot(object):
-	def __init__(self): 
-		self.fig = Figure()
-		self.canvas = FigureCanvas(self.fig)
+	''' a plot, as in a pair of axes and an area '''
+	def __init__(self, fig=None, canvas=None): 
+		''' constructor
+		fig: Figure object
+		canvas: FigureCanvas object
+		'''
+		self.fig = Figure() if fig is None else fig
+		self.canvas = FigureCanvas(self.fig) if fig is None else canvas
 
 		self.ax = self.fig.add_subplot(111)
 		self.width, self.height = None, None
@@ -89,7 +108,22 @@ class Plot(object):
 		self.axeslabels = ['X', 'Y']
 		self.titles = []
 
+		self.entities = []
+
+	def add(self, entity): self.entities.append(entity)
+	def pop(self, i): self.entities.pop(i)
+	def remove(self, entity): self.entities.remove(entity)
+	def __iter__(self): return iter(self.entities)
+
 	def render(self):
+		''' configure plot appropriately '''
+
+		for e in self.entities: 
+			try: e.draw(self)
+			except AttributeError:
+				print(e)
+				raise AttributeError
+
 		self.ax.set_xlim(left=self.xlim[0], right=self.xlim[1])
 		self.ax.set_ylim(bottom=self.ylim[0], top=self.ylim[1])
 		xlim = self.ax.get_xlim()
@@ -126,42 +160,92 @@ class Plot(object):
 		self.ax.set_title(title[:-2])
 
 	def save(self, filename, dpi=80, format='png'):
+		''' save plot to disk '''
 		self.fig.savefig(filename, dpi=dpi, format=format)
 
 class Entity(object):
+	''' something that can be drawn on a plot '''
 	def __init__(self): pass
 
-	def draw(self, plot): raise NotImplementedError
+	def draw(self, plot): 
+		''' called when rendering plots '''
+		raise NotImplementedError
 
 class Curve(Entity):
+	''' a curve '''
 	def __init__(self, X=[], Y=[], style='auto'):
+		''' constructor
+		X: iterable of floats (default:[])
+		Y: iterable of floats (default:[])
+		style: int/str, QUOD/Matplotlib-compatible color specifier (default:'auto')
+		'''
 		Entity.__init__(self)
 		self.X = X
 		self.Y = Y
 		self.style = style
 
+	def set_color(self, style=None):
+		''' set Curve color. If style is an int, automatically select from three '''
+		try: style = int(style)
+		except ValueError: pass
+		except TypeError: pass
+
+		if style is None: style = self.style
+
+		if type(style) is int: 
+			if (style % 3 == 0): self.style = 'red'
+			if (style % 3 == 1): self.style = 'blue'
+			if (style % 3 == 2): self.style = 'green'
+		else: self.style = style
+
 	def draw(self, plot): 
+		''' called when rendering plots '''
+		self.set_color()
 		if len(Y) and not len(X): 
 			plot.ax.plot(Y, style)
 		else: plot.ax.plot(X, Y, style)
 
 class Vspans(Entity):
+	''' things with a width and infinite height '''
 	def __init__(self, spans=[], style='orange', alpha=None):
+		''' constructor
+		spans: iterable of iterables. (default:[])
+		style: color specifier (default:'orange')
+		alpha: transparency/opacity (default:None)
+		'''
 		Entity.__init__(self)
 		self.spans = spans
 		self.style = style
 		self.alpha = alpha
 
 	def get_alpha(self):
+		''' get transparency '''
 		if type(self.style) is tuple and len(self.style) == 4: return self.style[3]
 		elif self.alpha is not None: return self.alpha
 		else: return 0.25
 
+	def set_color(self, style=None):
+		''' set color or choose a default '''
+		try: style = int(style)
+		except ValueError: pass
+		except TypeError: pass
+
+		if style is None: style = self.style
+
+		if type(style) is int: 
+			if (style % 3 == 0): self.style = 'orange'
+			if (style % 3 == 1): self.style = 'cyan'
+			if (style % 3 == 2): self.style = 'purple'
+		else: self.style = style
+
 	def draw(self, plot):
+		''' called when rendering plots '''
+		self.set_color()
 		for span in self.spans:
 			plot.ax.axvspan(span[0], span[1], facecolor=self.style, alpha=self.get_alpha())
 
 class Region(Vspans):
+	''' little boxes with widths, y-positions, and text but no height '''
 	def __init__(self, spans=[], yspan=[], label='', style='orange', alpha=None, pos='above', size=8):
 		Vspans.__init__(self, spans=spans, style=style, alpha=alpha)
 		self.label = label
@@ -170,6 +254,8 @@ class Region(Vspans):
 		self.size = size
 
 	def draw(self, plot):
+		''' called when rendering plots '''
+		self.set_color()
 		plot.ax.broken_barh(self.spans, self.yspan, facecolor=self.style, edgecolor=(1,1,1,0.5), zorder=2.0)
 
 		if self.pos == 'above':
@@ -178,8 +264,50 @@ class Region(Vspans):
 			xytext = [self.spans[0][0], self.yspan[0]+0.01]
 		plot.ax.annotate(self.label, xy=xytext, size=self.size)
 
+class Wedge(Entity):
+	''' a vertical black bar and a little triangle pointing into the interval '''
+	def __init__(self, x, scale=1, y=None, style=None):
+		''' constructor
+		x: left edge
+		scale: scale of marker. Negative values define left-pointing markers (default:1)
+		y: y position
+		style: color specifier
+		'''
+		self.x, self.y = x, y
+		self.style = 'black' if style is None else style
+		self.scale = scale
+
+	def draw(self, plot):
+		''' called when rendering plots '''
+		if self.y > 0: ymin, ymax = 0.5, 1
+		elif self.y < 0: ymin, ymax = 0, 0.5
+		else: ymin, ymax = 0, 1
+		x = max(plot.xlim[0], min(plot.xlim[1], self.x))
+		plot.ax.axvline(x=x, color=self.style, ymin=ymin, ymax=ymax)
+
+		if self.scale:
+			x = x + abs(self.scale)**.5 * (self.scale)/abs(self.scale)
+			if self.y == 0: y = 2
+			else: y = self.y
+
+			size = abs(self.scale)
+
+			if self.scale < 0: marker = '<'
+			if self.scale > 0: marker = '>'
+
+			plot.ax.scatter([self.x], [self.y], marker=marker, color=self.style, s=25*abs(self.scale))
+
 class Wall(Vspans):
+	''' vertical black bars with little triangles pointing into the interval '''
 	def __init__(self, spans=[], y=None, ylim=[0,1], style='black', wedge=1, single=False):
+		''' constructor
+		spans: iterable of iterables defining intervals, e.g. [[20, 45], [60, 80]] (default:[])
+		y: position of triangle (default:None)
+		ylim: where the black bars are relative to the plot (default:[0, 1])
+		style: color specifier (default:'black')
+		wedge: scale of triangle. Negative values result in left-pointing triangles (default:1)
+		single: define single walls instead of pairs of walls. (default:False)
+		'''
 		Vspans.__init__(self, spans=spans, style=style)
 		self.y = y
 		self.ylim = ylim
@@ -187,18 +315,21 @@ class Wall(Vspans):
 		self.single = single
 
 	def get_y(self):
+		''' get y '''
 		if type(self.y) is None: return 2
 		else: return self.y
 
 	def get_ylim(self):
+		''' get ylim '''
 		if self.ylim is None: return [0, 1]
-		elif type(self.ylim) is int:
+		elif type(self.ylim) is int or type(self.ylim) is float:
 			if self.ylim > 0: return [0.5, 1]
 			elif self.ylim == 0: return [0, 1]
 			else: return [0, 0.5]
 		else: return self.ylim
 
 	def draw(self, plot):
+		''' called when rendering plots '''
 		ylim = self.get_ylim()
 		for span in self.spans:
 			for i, x in enumerate(span): 
@@ -208,20 +339,30 @@ class Wall(Vspans):
 						if self.wedge >= 0: marker = '>'
 						else: marker = '<'
 					else:
-						if i % 2: marker = '<'
+						n = i
+						if self.wedge < 0: n += 1
+						if n % 2: marker = '<'
 						else: marker = '>'
 
 					#wx = x# + (abs(4*self.wedge)**0.5 * np.sign(0.5 - i % 2))
 					#FIXME: make the arrows aligned at any scale
 					wx = x - 2*(abs(self.wedge) * np.sign((i % 2) - 0.5)) - self.wedge*.5
 
-					if self.y >= 0: wy = 2
-					else: wy = -2
+					if self.y is None: wy = 2
+					else: wy = self.y
 
 					plot.ax.scatter([wx], [wy], marker=marker, color='black', s=25*abs(self.wedge))
 
 class HMMTOP(Vspans):
+	''' Vspans but based on HMMTOP predictions '''
 	def __init__(self, gseq, style='orange', alpha=None, nohmmtop=False, load=None):
+		''' constructor
+		gseq: sequence, if any
+		style: color specifier (default:'orange')
+		alpha: transparency (default:None)
+		nohmmtop: don't run HMMTOP (default:False)
+		load: load an existing prediction
+		'''
 		Vspans.__init__(self, style=style, alpha=alpha)
 		self.spans = []
 
@@ -255,19 +396,23 @@ class HMMTOP(Vspans):
 		self.spans = [[indices[i], indices[i+1]] for i in range(0, len(indices), 2)]
 
 	def parse_hmmtop(self, topout):
+		''' parse topout into spans '''
 		if not topout: return []
 		indices = re.findall('(?: IN| OUT)((?:\s*(?:[0-9]+))+)', topout.strip())[0].strip().split()
 		indices = [int(i) for i in indices[1:]]
 		return indices
 
 	def add(self, *spans):
+		''' add TMSs '''
 		for span in spans: self.spans.append(span)
 
 	def replace(self, *spans):
+		''' replace TMSs '''
 		self.delete(*spans)
 		for newspan in spans: self.spans.append(newspan)
 
 	def delete(self, *spans):
+		''' delete TMSs '''
 		removeme = []
 		for j, oldspan in enumerate(self.spans):
 			for i, newspan in enumerate(spans):
@@ -278,6 +423,7 @@ class HMMTOP(Vspans):
 			self.spans.pop(j)
 
 	def extend(self, *spans):
+		''' extend TMSs '''
 		fuseme = {}
 		appendme = []
 		for i, newspan in enumerate(spans):
@@ -306,17 +452,32 @@ class HMMTOP(Vspans):
 			self.spans.append(span)
 
 class Point(Entity):
+	''' a thing with an x and a y position '''
 	def __init__(self, pos, marker='.', style='r', size=25):
+		''' constructor 
+		pos: iterable with x and y
+		marker: marker at point (default:'.')
+		style: color (default:'r')
+		size: scale of marker (default:25)
+		'''
 		self.x, self.y = pos
 		self.marker = marker
 		self.style = style
 		self.size = size
 
 	def draw(self, plot):
+		''' called when rendering plots '''
 		plot.ax.scatter([self.x], [self.y], marker=self.marker, color=self.style, s=self.size)
 		
 class Entropy(Curve):
+	''' a curve where y is equal to the average informational content in a window about each residue '''
 	def __init__(self, gseq, style='r', offset=0, window=19):
+		''' constructor
+		gseq: sequence
+		style: color specifier (default:'r')
+		offset: shift curve this far (default:0)
+		window: window size to compute entropy over (default:19)
+		'''
 		Curve.__init__(self, style=style)
 		self.window = window
 
@@ -340,7 +501,10 @@ class Entropy(Curve):
 
 		self.Y = np.array(entropies)
 		self.X = np.arange(0, len(self.Y))+window//2+offset+1
+
 	def draw(self, plot):
+		''' called when rendering plots '''
+		self.set_color()
 		plot.xlim[0] = min(plot.xlim[0], self.X[0] - self.window//2)
 		plot.xlim[1] = max(plot.xlim[1], self.X[-1] + self.window//2)
 		plot.ylim[0] = 2
@@ -350,13 +514,21 @@ class Entropy(Curve):
 		plot.ax.plot(self.X, self.Y, color=self.style, linewidth=1)
 
 class Psipred(Curve):
+	''' a curve where y is equal to the helix probability (red), sheet probability (yellow), and coil probability (green) as given by PSIPRED '''
 	def __init__(self, pred, style=None, offset=0, window=1):
+		''' constructor
+		pred: PSIPREd prediction as a str
+		style: color specifier (default:None)
+		offset: shift x-wise (default:0)
+		window: compute moving averages over this many residues (default:1)
+		'''
 		Curve.__init__(self, style=style)
 		self.window = window
 
 		self.parse(pred)
 
 	def parse(self, pred):
+		''' parse predictions '''
 		x = []
 		ycoil = []
 		yhelx = []
@@ -383,6 +555,7 @@ class Psipred(Curve):
 			self.Ystrn = np.array([np.mean(ystrn[i:i+self.window]) for i, span in enumerate(ystrn[:-self.window])])
 
 	def draw(self, plot):
+		''' called when rendering plots '''
 		plot.xlim[0] = min(plot.xlim[0], self.X[0] - self.window//2)
 		plot.xlim[1] = max(plot.xlim[1], self.X[-1] + self.window//2)
 		plot.ylim[0] = 0
@@ -395,7 +568,14 @@ class Psipred(Curve):
 		plot.ax.plot(self.X, self.Ystrn, color='y', linewidth=2)
 
 class Hydropathy(Curve):
+	''' a curve where y is the moving average of the hydropathy '''
 	def __init__(self, gseq, style='r', offset=0, window=19):
+		''' constructor
+		gseq: sequence
+		style: color specifier (default:'r')
+		offset: shift x-wise by this amount (default:0)
+		window: window size (default:19)
+		'''
 		Curve.__init__(self, style=style)
 		self.window = window
 		#Copied with barely any modification from gblast3.py
@@ -472,6 +652,8 @@ class Hydropathy(Curve):
 			self.X = np.arange(offset+1, len(self.Y)+1)+window//2
 
 	def draw(self, plot):
+		''' called when rendering plots '''
+		self.set_color()
 		plot.xlim[0] = min(plot.xlim[0], self.X[0] - self.window//2)
 		plot.xlim[1] = max(plot.xlim[1], self.X[-1] + self.window//2)
 
@@ -479,7 +661,19 @@ class Hydropathy(Curve):
 		plot.ax.plot(self.X, self.Y, color=self.style, linewidth=1)
 
 class What(Entity):
+	''' a container with both a curve and HMMTOP vspans '''
 	def __init__(self, seq, style=0, tmscolor=None, linecolor=None, color=None, nohmmtop=False, mode='hydropathy', window=None, predfile=None):
+		''' constructor
+		seq: sequence or input data
+		style: color specifier (default:0)
+		tmscolor: vspan color specifier (default:None)
+		linecolor: curve color specifier (default:None)
+		color: color specifier for everything (default:None)
+		nohmmtop: do not run HMMTOP (default:False)
+		mode: what kind of plot to generate ([hydropathy], entropy, psipred)
+		window: window size for computing moving averages (default:None)
+		predfile: prediction file to load for PSIPRED (default:None)
+		'''
 		Entity.__init__(self)
 		if mode == 'psipred': self.seq = self.get_psipred_seq(seq)
 		else: self.seq = seq
@@ -510,6 +704,7 @@ class What(Entity):
 		self.entities.append(HMMTOP(self.seq, style=self.get_tms_color(), nohmmtop=nohmmtop))
 
 	def get_psipred_seq(self, seq):
+		''' obtain sequence given a prediction file '''
 		s = ''
 	 	for l in seq.split('\n'): 
 			if not l.strip(): continue
@@ -519,6 +714,7 @@ class What(Entity):
 		return s.strip()
 
 	def get_title(self, showlength=True):
+		''' generate a title given attributes '''
 		if self.seq.startswith('>'): 
 			s = self.seq[1:self.seq.find('\n')]
 			if showlength: 
@@ -531,6 +727,7 @@ class What(Entity):
 			else: return '{}...{} ({}aa)'.format(self.seq[:8], self.seq[-3:], len(self.seq))
 
 	def get_curve_color(self):
+		''' generate a curve color '''
 		if self.linecolor is None:
 			if (self.style % 3) == 0: return 'red'
 			elif (self.style % 3) == 1: return 'blue'
@@ -540,6 +737,7 @@ class What(Entity):
 		else: return self.linecolor 
 
 	def get_tms_color(self):
+		''' generate a vspan color '''
 		if self.tmscolor is None:
 			if (self.style % 3) == 0: return 'orange'
 			elif (self.style % 3) == 1: return 'cyan'
@@ -549,6 +747,7 @@ class What(Entity):
 		else: return self.tmscolor
 
 	def draw(self, plot):
+		''' called when rendering plots '''
 		#for e in self.entities: e.draw(notitle=True)
 		for e in self.entities: e.draw(plot)
 
@@ -556,6 +755,7 @@ class What(Entity):
 		plot.titles.append(self.get_title())
 
 def split_fasta(fastastr):
+	''' split multirecord FASTAs '''
 	sequences = []
 	for l in fastastr.split('\n'):
 		if l.startswith('>'): sequences.append(l)
@@ -566,6 +766,9 @@ def split_fasta(fastastr):
 	return sequences
 
 def parse_manual_tms(top, s):
+	''' under construction
+
+	will allow TMS specification using a nice mini-language '''
 	tmss = []
 
 	indices = []
@@ -581,8 +784,15 @@ def parse_manual_tms(top, s):
 	for token in s.split():
 		if isverb(token): pass
 		if isint(token): indices.append(int(token))
+	return indices
 
 def find(entitylist, target, index=None):
+	''' look for a specific kind of entity in a list of entities
+
+	entitylist: list of entities
+	target: type of entity
+	index: does something (default:None)
+	'''
 	if index is None: anymode = 1
 	else:
 		anymode = 0
@@ -599,12 +809,47 @@ def find(entitylist, target, index=None):
 
 #def main(infiles, mode='hydropathy', walls=None, ):
 #def what(sequences, labels=None, imgfmt='png', directory=None, filename=None, title=False, dpi=80, hide=True, viewer=None, bars=[], color='auto', offset=0, statistics=False, overwrite=False, manual_tms=None, wedges=[], ywedge=2, legend=False, window=19, silent=False, axisfont=None, tickfont=None, xticks=None, mode='hydropathy', width=None, height=None):
+def what(*args, **kwargs): main(*args, **kwargs)
 def main(infiles, **kwargs):
+	''' generate a QUOD figure from start to finish
+	will attempt to generate multi-subplot figures if multiple modes are given
+	infiles: iterable of filenames
+
+	keyword arguments:
+		add_marker: add a point marker at these points
+		add_region: add a region marker at these spans
+		add_tms: add a TMS marker at these spans
+		axis_font: font size for axis labels
+		bars: add vertical bars at these x-values
+		color: color everything this
+		delete_tms: delete TMSs intersecting these spans
+		entities: preload in this iterable of Entities
+		entropy: plot entropy too
+		extend_tms: extend TMSs intersecting these spans
+		force_seq: force inputs to be interpreted as sequences
+		load_tms: load TMS definitions from a file
+		manual_tms: not implemented
+		no_tms: don't run HMMTOP for these sequence IDs
+		outdir: where to output figure images
+		outfile: what to name figure images
+		psipred: plot PSIPRED predictions too
+		replace_tms: replace TMSs intersecting these spans
+		tick_font: font size for tick labels
+		title: manually set title
+		wall: vertical black bars with wedges
+		walls: vertical black bars with inward-pointing wedges
+		window: window width
+		x_offset: shift x-wise by this amount
+		xticks: x-tick interval
+	'''
+
+	#grep -o 'kwargs\[.*:' quod.py | sed "s/kwargs\[\'//g;s/']//g;s/is not None//g;s/mode == '//g;s/'//g;s/ //g" | sort | uniq | pbcopy
 	plot = Plot()
-	entities = []
 
 	if 'width' in kwargs: width = kwargs['width']
+	else: width = None
 	if 'height' in kwargs: height = kwargs['height']
+	else: height = None
 
 	plot.width = width
 	plot.height = height
@@ -632,7 +877,7 @@ def main(infiles, **kwargs):
 					elif (n_loads % 3) == 2: style = 'purple'
 					else: style = 'orange'
 				x = HMMTOP(gseq='', nohmmtop=True, load=token, style=style)
-				entities.append(x)
+				plot.add(x)
 				n_loads += 1
 		if n_id == 0: no_tms.append(0)
 
@@ -664,7 +909,7 @@ def main(infiles, **kwargs):
 			else: whatkwargs['color'] = color
 			if mode == 'entropy': whatkwargs['mode'] = 'entropy'
 			elif mode == 'psipred': whatkwargs['mode'] = 'psipred'
-			entities.append(What(seq, **whatkwargs))
+			plot.add(What(seq, **whatkwargs))
 			n += 1
 	else:
 		for fn in infiles:
@@ -677,7 +922,7 @@ def main(infiles, **kwargs):
 					else: whatkwargs['color'] = color
 					if mode == 'entropy': whatkwargs['mode'] = 'entropy'
 					elif mode == 'psipred': whatkwargs['mode'] = 'psipred'
-					entities.append(What(seq, **whatkwargs))
+					plot.add(What(seq, **whatkwargs))
 					n += 1
 
 	if 'add_tms' in kwargs and kwargs['add_tms']:
@@ -689,8 +934,8 @@ def main(infiles, **kwargs):
 				if len(span.split('-')) == 1: indices = [int(span)]*2
 				else: indices = [int(x) for x in span.split('-')]
 				spans = [indices[i:i+2] for i in range(0, len(indices), 2)]
-				entities.append(HMMTOP('', style=color, alpha=None, nohmmtop=True))
-				entities[-1].spans = spans
+				plot.add(HMMTOP('', style=color, alpha=None, nohmmtop=True))
+				plot[-1].spans = spans
 
 	if 'add_marker' in kwargs and kwargs['add_marker']:
 		for marker in kwargs['add_marker']:
@@ -708,19 +953,19 @@ def main(infiles, **kwargs):
 				else: color = token
 
 			done = []
-			for e in find(entities, What, index):
-				for ee in find(e.entities, Hydropathy):
+			for e in find(plot, What, index):
+				for ee in find(e, Hydropathy):
 					if color is None: color = ee.style
 
 					for pair in zip(ee.X, ee.Y):
 						for x in pos:
 							if x == pair[0]:
-								if np.isnan(pair[1]): entities.append(Point([x,0], marker='o', style=color, size=size))
-								else: entities.append(Point(pair, marker='o', style=color, size=size))
+								if np.isnan(pair[1]): plot.add(Point([x,0], marker='o', style=color, size=size))
+								else: plot.add(Point(pair, marker='o', style=color, size=size))
 								done.append(x)
 					for x in pos:
 						if x not in done:
-							entities.append(Point([x,0], marker='o', style=color, size=size))
+							plot.add(Point([x,0], marker='o', style=color, size=size))
 
 	if 'extend_tms' in kwargs and kwargs['extend_tms']:
 		for tms in kwargs['extend_tms']:
@@ -735,7 +980,7 @@ def main(infiles, **kwargs):
 				elif not spans and isspans(token): spans = parse_spans(token)
 				else: color = token
 
-			for e in find(entities, What, index):
+			for e in find(plot, What, index):
 				for ee in e.entities:
 					if type(ee) is HMMTOP:
 						if color is None or color == ee.style: 
@@ -748,8 +993,8 @@ def main(infiles, **kwargs):
 								for j, newspan in enumerate(spans):
 									if overlap(oldspan, newspan): ee.delete(newspan)
 							#integration
-							entities.append(HMMTOP('', style=color))
-							entities[-1].spans = spans
+							plot.add(HMMTOP('', style=color))
+							plot[-1].spans = spans
 
 	#if an existing TMS on sequence +x overlaps with a TMS defined by delete_tms, erase it
 	if 'delete_tms' in kwargs and kwargs['delete_tms']:
@@ -764,7 +1009,7 @@ def main(infiles, **kwargs):
 				elif not spans and isspans(token): spans = parse_spans(token)
 				else: color = token
 
-			for e in find(entities, What, index):
+			for e in find(plot, What, index):
 				for ee in find(e.entities, HMMTOP): ee.delete(*spans)
 
 	if 'replace_tms' in kwargs and kwargs['replace_tms']:
@@ -779,13 +1024,13 @@ def main(infiles, **kwargs):
 				elif not spans and isspans(token): spans = parse_spans(token)
 				else: color = token
 
-			for e in find(entities, What, index):
+			for e in find(plot, What, index):
 				for ee in find(e.entities, HMMTOP):
 					if color is None or color == ee.style: ee.replace(*spans)
 					else:
 						ee.delete(*spans)
-						entities.append(HMMTOP('', style=color))
-						entities[-1].spans = spans
+						plot.add(HMMTOP('', style=color))
+						plot[-1].spans = spans
 
 	if 'add_region' in kwargs and kwargs['add_region']:
 		for region in kwargs['add_region']:
@@ -827,14 +1072,14 @@ def main(infiles, **kwargs):
 			if label is None: label = 'untitled region'
 			if size is None: size = 8
 
-			entities.append(Region(spans, [y-0.15, 0.15], label, style=color, size=size))
+			plot.add(Region(spans, [y-0.15, 0.15], label, style=color, size=size))
 			#for token in re.split(r':', region): print(token)
 
 	if 'xticks' in kwargs and kwargs['xticks'] is not None: plot.xticks = kwargs['xticks']
 	else: plot.xticks = None
 
 	if 'bars' in kwargs and kwargs['bars'] is not None: 
-		[entities.append(wall) for wall in parse_walls(kwargs['bars'], wedge=0)]
+		[plot.add(wall) for wall in parse_walls(kwargs['bars'], wedge=0)]
 
 	if 'dpi' in kwargs: dpi = kwargs['dpi']
 	else: dpi = 80
@@ -843,10 +1088,10 @@ def main(infiles, **kwargs):
 	else: imgfmt = 'png'
 
 	if 'walls' in kwargs and kwargs['walls'] is not None: 
-		[entities.append(wall) for wall in parse_walls(kwargs['walls'])]
+		[plot.add(wall) for wall in parse_walls(kwargs['walls'])]
 
 	if 'wall' in kwargs and kwargs['wall'] is not None:
-		[entities.append(wall) for wall in parse_walls(kwargs['wall'], single=1)]
+		[plot.add(wall) for wall in parse_walls(kwargs['wall'], single=1)]
 
 	if 'outdir' in kwargs and kwargs['outdir']: prefix = kwargs['outdir']
 	else: prefix = ''
@@ -857,7 +1102,7 @@ def main(infiles, **kwargs):
 	else: outfile = None
 
 	if 'quiet' in kwargs: quiet = kwargs['quiet']
-	else: quiet = None
+	else: quiet = True
 
 	if 'viewer' in kwargs: viewer = kwargs['viewer']
 	else: viewer = None
@@ -872,7 +1117,8 @@ def main(infiles, **kwargs):
 	if 'manual_tms' in kwargs and kwargs['manual_tms'] is not None: 
 		pass #entities += parse_manual_tms(kwargs['manual_tms'])
 
-	for e in entities: e.draw(plot)
+	if 'entities' in kwargs and kwargs['entities'] is not None: 
+		for e in kwargs['entities']: plot.add(e)
 
 	plot.render()
 
@@ -886,12 +1132,14 @@ def main(infiles, **kwargs):
 	if title is not None: plot.ax.set_title(title)
 	if outfile is None: outfile = sanitize(plot.ax.get_title())
 
-	if len(os.path.splitext(outfile)) == 1: outfile += '.{}'.format(imgfmt)
+	if outfile.lower().endswith('.{}'.format(imgfmt.lower())): pass
+	elif len(os.path.splitext(outfile)) == 1: outfile += '.{}'.format(imgfmt)
 	elif len(os.path.splitext(outfile)[-1]) not in [3, 4]: 
 		outfile += '.{}'.format(imgfmt)
 	elif os.path.splitext(outfile)[-1].lower() != imgfmt.lower():
 		outfile += '.{}'.format(imgfmt)
 
+	if prefix not in outfile: outfile = '{}/{}'.format(prefix, outfile)
 	plot.save(outfile, dpi=dpi, format=imgfmt)
 
 	if not quiet:
@@ -903,19 +1151,32 @@ def main(infiles, **kwargs):
 		
 
 def parse_walls(strlist, wedge=1, single=False):
-	#turns a list of wall specifications into Wall() objects
+	'''
+	turns a list of wall specifications into Wall() objects
+
+	strlist: a list of string with syntax "spanslike1,spanslike2,...:float:float" where spanslike is a comma-separated list of ranges, the first float defines the y position of the marker, and the second float defines the size/direction of the marker(s)
+	wedge: another way to set marker size/direction
+	single: produce single walls instead of double walls
+	'''
 	if not strlist: return None
 	out = []
 	for wall in strlist:
 		if type(wall) is str:
-			coords = [int(x) for x in wall.split(',')]
-			if len(coords) == 1: coords.append(5)
-			if len(coords) == 2: coords.append(None)
+			tokens = wall.split(':')
+			if len(tokens) == 1: tokens.append(None)
+			if len(tokens) == 2: tokens.append(None)
 
-			span = [coords[0], coords[0]+coords[1]]
-			out.append(Wall([span], y=coords[2], ylim=coords[2], wedge=wedge, single=single))
+			if len(tokens[1]) == 0: y = None
+			else: y = float(tokens[1])
+
+			wedge = wedge if tokens[2] is None else float(tokens[2])
+
+			spans = parse_spans(tokens[0])
+
+			out.append(Wall(spans, y=y, ylim=y, wedge=wedge, single=single))
 		elif type(wall) is int:
 			out.append(Wall([[wall, wall]], wedge=wedge, single=single))
+		else: raise ValueError('Unsupported strlist format')
 	return out
 
 if __name__ == '__main__': 
@@ -940,8 +1201,8 @@ if __name__ == '__main__':
 	parser.add_argument('-sp', action='store_true', help='Force inputs to be interpreted as PSIPRED predictions')
 	parser.add_argument('-t', metavar='format', default='png', help='Format of graph (\033[1mpng\033[0m, eps, jpeg, jpg, pdf, pgf, ps, raw, rgba, svg, svgz, tif, tiff')
 	parser.add_argument('-v', action='store_true', help='Verbose output. Enables warnings and generally makes things messier')
-	parser.add_argument('-w', '--walls', metavar='x(,dx(,y))', nargs='+', help='Draws bounds around sequences and such')
-	parser.add_argument('-W', '--wall', metavar='x(,dx(,y))', nargs='+', help='Draws bounds around sequences and such')
+	parser.add_argument('-w', '--walls', metavar='x0-x(:scale(:y))', nargs='+', help='Draws bounds around sequences and such, e.g. "20-45,60-80:0.5:2" draws 2x-scaled markers around the interval [20, 45] and [60, 80] at y=0.5 and "36-60" draws default-scaled (1x) markers around the interval [36, 60] at the default y (y=2)')
+	parser.add_argument('-W', '--wall', metavar='x(:scale(:y))', nargs='+', help='Draws a single wall for each specification, allowing left-pointing intervals with negative scale values. See -w/--walls for more information on syntax.')
 	parser.add_argument('--axis-font', metavar='size', type=int, help='Axis label size (pt)')
 	parser.add_argument('--height', metavar='height', type=float, help='Plot height in inches (default:5.5)')
 	parser.add_argument('--mode', default='hydropathy', help='mode to run QUOD in (\033[1mhydropathy\033[0m, entropy)')
