@@ -114,6 +114,8 @@ class Plot(object):
 	def pop(self, i): self.entities.pop(i)
 	def remove(self, entity): self.entities.remove(entity)
 	def __iter__(self): return iter(self.entities)
+	def __getitem__(self, i): return self.entities[i]
+	def __getslice__(self, s): return self.entities[s]
 
 	def render(self):
 		''' configure plot appropriately '''
