@@ -708,7 +708,7 @@ class What(Entity):
 	def get_psipred_seq(self, seq):
 		''' obtain sequence given a prediction file '''
 		s = ''
-	 	for l in seq.split('\n'): 
+		for l in seq.split('\n'): 
 			if not l.strip(): continue
 			elif l.lstrip().startswith('#'): continue
 			elif l.lstrip().startswith('>'): s += '\n'+ l.strip() + '\n'
@@ -1172,11 +1172,15 @@ def parse_walls(strlist, wedge=1, single=False):
 			elif len(tokens[1]) == 0: y = None
 			else: y = float(tokens[1])
 
+			if y is None or y == 0: ylim = [0, 1]
+			elif y > 0: ylim = [0.5, 1]
+			else: ylim = [0, 0.5]
+
 			wedge = wedge if tokens[2] is None else float(tokens[2])
 
 			spans = parse_spans(tokens[0])
 
-			out.append(Wall(spans, y=y, ylim=y, wedge=wedge, single=single))
+			out.append(Wall(spans, y=y, ylim=ylim, wedge=wedge, single=single))
 		elif type(wall) is int:
 			out.append(Wall([[wall, wall]], wedge=wedge, single=single))
 		else: raise ValueError('Unsupported strlist format')
