@@ -1168,7 +1168,8 @@ def parse_walls(strlist, wedge=1, single=False):
 			if len(tokens) == 1: tokens.append(None)
 			if len(tokens) == 2: tokens.append(None)
 
-			if len(tokens[1]) == 0: y = None
+			if tokens[1] is None: y = None
+			elif len(tokens[1]) == 0: y = None
 			else: y = float(tokens[1])
 
 			wedge = wedge if tokens[2] is None else float(tokens[2])
