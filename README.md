@@ -12,8 +12,8 @@ Find below the list of programs available. Scripts developed by our group as dep
 **6.** tss.py        ([Manual](manuals/BioV_manual.pdf))  
 **7.** ssearch.py    ([Manual](manuals/BioV_manual.pdf))  
 **8.** ancient.py    ([Manual](manuals/AR_INSTRUCTIONS.pdf))   
-**9.** quod.py       ([Manual](https://github.com//khendarg/hvordan/blob/master/docs/quod.md))  
-**10.** hvordan.py   ([Manual](https://github.com/khendarg/hvordan/blob/master/docs/hvordan.md))  
+**9.** quod.py       ([Manual](https://gitlab.com//khendarg/hvordan/blob/master/docs/quod.md))  
+**10.** hvordan.py   ([Manual](https://gitlab.com/khendarg/hvordan/blob/master/docs/hvordan.md))  
 **11.** tmsplit.py   ([Manual](manuals/tmsplit.md))
 
 ---  
