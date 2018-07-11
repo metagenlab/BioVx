@@ -503,7 +503,7 @@ class Tools:
         queryPath = self.indir+'/img/'+genome+'_hydro.png'
         hitPath = self.indir+'/img/'+acc+'-'+genome+'_hydro.png'
 
-        quod = ' -s -q -d {} --width 10 --height 3 '.format(self.indir+"/img/")
+        quod = ' -s -q -d {} --width 10 --height 3 --xticks 50'.format(self.indir+"/img/")
 
 
         #Query Hydropathy
@@ -511,7 +511,7 @@ class Tools:
 
             query=ParseDefline(genome).id
             querySeq = self.queries[str(query)].seq
-            query = 'quod.py {} -o {} -c blue -w {},{},0 -l {}'.format(querySeq,genome+'_hydro',hsp.query_start,hsp.query_end,genome) + quod
+            query = 'quod.py {} -o {} -c blue -w {}-{} -l {}'.format(querySeq,genome+'_hydro',hsp.query_start,hsp.query_end,genome) + quod
 
             #os.system(query)
             subprocess.call(query.split())
@@ -521,7 +521,7 @@ class Tools:
         
             hitID = ParseDefline(hit.title,True).id
             hitSeq = self.tcdbHits[str(hitID)].seq
-            hit = 'quod.py {} -o {} -c red -w {},{},0 -l {}'.format(hitSeq, acc+'-'+genome+'_hydro',hsp.sbjct_start,hsp.sbjct_end,acc) + quod
+            hit = 'quod.py {} -o {} -c red -w {}-{} -l {}'.format(hitSeq, acc+'-'+genome+'_hydro',hsp.sbjct_start,hsp.sbjct_end,acc) + quod
 
             #os.system(hit)
             subprocess.call(hit.split())
