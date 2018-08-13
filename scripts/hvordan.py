@@ -34,6 +34,43 @@ def info(*msgs):
 	''' prints info messages '''
 	for l in msgs: print('[INFO]', l, file=sys.stderr)
 
+def run_pfam(indir, outdir, pfamdb):
+	if not os.path.isdir(outdir): os.mkdir(outdir)
+	for fn in os.listdir(indir):
+		if not fn.endswith('.fa'): continue
+		outfn = '{}/{}.pfam'.format(outdir, os.path.basename(os.path.splitext(fn)[0]))
+		if VERBOSITY: redirect = '/dev/stderr'
+		else: redirect = '/dev/null'
+		cmd = ['hmmscan', '--cpu', '2', '--noali', '--cut_ga', '-o', redirect, '--domtblout', outfn, pfamdb, '{}/{}'.format(indir, fn)]
+		subprocess.call(cmd)
+		s = ''
+		#for arg in cmd: s += arg + ' '
+		#info(s)
+
+def parse_pfam(infile, color=None, y=-2.5, size=8):
+	entities = []
+	spans = []
+	with open(infile) as f:
+		for l in f:
+			if l.startswith('#'): continue
+			elif not l.strip(): continue
+			else:
+				sl = l.strip().split()
+				#label = l[181:].strip()
+				#start = int(l[152:157].strip())
+				#end = int(l[158:163].strip())
+				#label = sl[-1]
+				label = sl[1]
+				start = int(sl[19])
+				end = int(sl[20])
+
+				dy = 0
+				for span in spans:
+					if (span[0] <= start <= span[1]) or (span[0] <= end <= span[1]): dy = 0.3
+				entities.append(quod.Region([[start, end]], [y-0.15+dy, 0.15], label, style=color, size=size))
+				spans.append([start, end])
+	return entities
+
 def fetch(accessions, email=None, db='protein'):
 	''' grabs PDBs from locally installed TCDB BLAST databases, I'm pretty sure '''
 	if not accessions: return ''
@@ -263,24 +300,44 @@ def quod_set(seqids, sequences, indir, outdir, dpi=300, force=False, bars=[], pr
 		y = 2
 		medges[-1].append(quod.Wall(spans=[span], y=y, ylim=[0.5,1]))
 
+	domains = []
+	for i, seqid in enumerate(seqids):
+		if i < 2: color = 'red'
+		else: color = 'blue'
+		domains.append(parse_pfam('{}/../pfam/{}.pfam'.format(indir, seqid), color=color))
+
 	#Draw A: barred by B
-	quod.what([sequences[seqids[0]]], force_seq=True, title=seqids[0], imgfmt='png', outdir=outdir, outfile=(seqids[0] + '_' + seqids[1] + '.png'), dpi=dpi, hide=1, entities=wedges[0], silent=True, width=15, height=3)
+	quod.what([sequences[seqids[0]]], force_seq=True, title=seqids[0], imgfmt='png', outdir=outdir, outfile=(seqids[0] + '_' + seqids[1] + '.png'), dpi=dpi, hide=1, entities=wedges[0]+domains[0], silent=True, width=15, height=3)
 
 	#Draw B: barred by C
-	quod.what([sequences[seqids[1]]], force_seq=True, title=seqids[1], imgfmt='png', outdir=outdir, outfile=(seqids[1] + '_' + seqids[2] + '.png'), dpi=dpi, hide=1, entities=wedges[1]+medges[0], silent=True, width=15, height=3)
+	quod.what([sequences[seqids[1]]], force_seq=True, title=seqids[1], imgfmt='png', outdir=outdir, outfile=(seqids[1] + '_' + seqids[2] + '.png'), dpi=dpi, hide=1, entities=wedges[1]+medges[0]+domains[1], silent=True, width=15, height=3)
 
 	#Draw C: barred by B
-	quod.what([sequences[seqids[2]]], force_seq=True, title=seqids[2], imgfmt='png', outdir=outdir, outfile=(seqids[2] + '_' + seqids[1] + '.png'), dpi=dpi, hide=1, color=1, entities=wedges[2]+medges[1], silent=True, width=15, height=3)
+	quod.what([sequences[seqids[2]]], force_seq=True, title=seqids[2], imgfmt='png', outdir=outdir, outfile=(seqids[2] + '_' + seqids[1] + '.png'), dpi=dpi, hide=1, color=1, entities=wedges[2]+medges[1]+domains[2], silent=True, width=15, height=3)
 
 	#Draw D: barred by C
-	quod.what([sequences[seqids[3]]], force_seq=True, title=seqids[3], imgfmt='png', outdir=outdir, outfile=(seqids[3] + '_' + seqids[2] + '.png'), dpi=dpi, hide=1, color=1, entities=wedges[3], silent=True, width=15, height=3)
+	quod.what([sequences[seqids[3]]], force_seq=True, title=seqids[3], imgfmt='png', outdir=outdir, outfile=(seqids[3] + '_' + seqids[2] + '.png'), dpi=dpi, hide=1, color=1, entities=wedges[3]+domains[3], silent=True, width=15, height=3)
 
 
-def build_html(bc, indir, blasts, outdir='hvordan_out/html', filename='test.html', lastpair=None, nextpair=None):
+def get_pfam(bc, prefix):
+	print(prefix)
+	domaindefs = []
+	for acc in bc[:4]:
+		with open('{}/pfam/{}.pfam'.format(prefix, acc)) as f:
+			for l in f:
+				if not l.strip(): continue
+				elif l.startswith('#'): continue
+				domaindefs.append(l.strip())
+	return domaindefs
+
+def build_html(bc, indir, blasts, outdir='hvordan_out/html', filename='test.html', lastpair=None, nextpair=None, pfam=None):
 	''' build an HTML report '''
 
 	if not os.path.isdir(outdir): os.mkdir(outdir)
 	if not os.path.isdir(outdir + '/assets'): os.mkdir(outdir + '/assets')
+
+	if pfam is None: pfam = get_pfam(bc, prefix=indir)
+		
 
 	if not os.path.isfile(outdir + '/assets/openclose.js'):
 		f = open(outdir + '/assets/openclose.js', 'w')
@@ -307,7 +364,7 @@ def build_html(bc, indir, blasts, outdir='hvordan_out/html', filename='test.html
 	out += '\n<h2>Table of contents</h2>'
 	out += '\n<button class="showhide" id="tocsh" onclick="toggle_section(\'toc\', \'tocsh\')">Hide</button>'
 
-	out += '\n<div class="toc" id="toc"> <ol> <li><a href="#summary">Summary</a></li> <li><a href="#tcsummary">TCBLAST Summary</a></li> <li><a href="#pairwise">Pairwise</a></li> <li><a href="#abcd">ABCD hydropathy plots</a></li> <li><a href="#bc">BC hydropathy plot</a></li> <li><a href="sequences">Sequences</a></li> </ol> </div>'
+	out += '\n<div class="toc" id="toc"> <ol> <li><a href="#summary">Summary</a></li> <li><a href="#tcsummary">TCBLAST Summary</a></li> <li><a href="#pairwise">Pairwise</a></li> <li><a href="#abcd">ABCD hydropathy plots</a></li> <li><a href="#bc">BC hydropathy plot</a></li> <li><a href="sequences">Sequences</a></li> <li><a href="domains">Domains</a></li>  </ol> </div>'
 
 	#stats
 	out += '\n<h2>Summary</h2>'
@@ -367,6 +424,13 @@ def build_html(bc, indir, blasts, outdir='hvordan_out/html', filename='test.html
 	out += '\n<div class="resizeable whataln monospace" id="sequences"><div class="scrollable">'
 	out += ('\n%s\n%s\n%s\n%s' % tuple(bc[4:8])).replace('\n', '<br/>\n')
 	out += '\n</div></div>'
+
+	#pfam
+	out += '\n<div class="clear></div><br/><a name="domains"><h3>Domains</h3></a>'
+	out += '\n<button class="showhide" id="domsh" onclick="toggle_section(\'domains\', \'domsh\')">Hide</button>'
+	out += '\n<div class="resizeable whataln monospace" id="domains"><div class="scrollable"><pre>'
+	for domainstr in pfam: out += '\n{}<br/>'.format(domainstr)
+	out += '\n</pre></div></div>'
 
 	out += '\n</body></html>'
 
@@ -517,7 +581,7 @@ def ggsearch(seq1, seq2):
 	return alns
 
 
-def summarize(p1d, p2d, outdir, minz=15, maxz=None, dpi=100, force=False, email=None, musthave=None, thispair=None, fams=None, maxhits=50):
+def summarize(p1d, p2d, outdir, minz=15, maxz=None, dpi=100, force=False, email=None, musthave=None, thispair=None, fams=None, maxhits=50, pfamdb='./Pfam-A.hmm'):
 	''' summarize stuff '''
 	if thispair is not None:
 		if len(thispair) % 2: error('Unpaired sequence found')
@@ -578,6 +642,7 @@ def summarize(p1d, p2d, outdir, minz=15, maxz=None, dpi=100, force=False, email=
 	if VERBOSITY: info('Retrieving %d sequence(s)' % len(fetchme))
 
 	clean_fetch(fetchme, outdir + '/sequences', force=force, email=email)
+	run_pfam(indir=(outdir + '/sequences'), outdir='{}/pfam'.format(outdir), pfamdb=pfamdb)
 
 	if VERBOSITY: info('Done retrieving %d sequences' % len(fetchme))
 
@@ -703,6 +768,10 @@ if __name__ == '__main__':
 		parser.add_argument('-e', '--email', default=None, help='Working email in case too many requests get sent and the NCBI needs to initiate contact. Defaults to checking $ENTREZ_EMAIL if set. {current value: %s}' % os.environ['ENTREZ_EMAIL'])
 	else: parser.add_argument('-e', '--email', default=None, help='Working email in case too many requests get sent and the NCBI needs to initiate contact. Defaults to checking $ENTREZ_EMAIL if set. {unset}')
 
+	if 'PFAMDB' in os.environ:
+		parser.add_argument('-d', '--pfamdb', default=os.environ['PFAMDB'], help='Which PFAM database to use. Defaults to checking $PFAMDB if set. (default: {})'.format(os.environ['PFAMDB']))
+	else: parser.add_argument('-d', '--pfamdb', default='/ResearchData/pfam/pfamdb/Pfam-A.hmm', help='Which PFAM database to use. Defaults to checking $PFAMDB if set. (default: {})'.format('/ResearchData/pfam/pfamdb/Pfam-A.hmm'))
+
 	parser.add_argument('-i', metavar='ACC', nargs='+', help='Operate only on pairs containing these accessions')
 	parser.add_argument('-p', metavar='ACC', nargs='+', help='Operate only on these specific pairs.')
 
@@ -712,4 +781,4 @@ if __name__ == '__main__':
 		parser.print_help()
 		exit()
 
-	summarize(args.p1d, args.p2d, args.outdir, minz=args.z_min, maxz=args.z_max, dpi=args.dpi, force=args.clobber, email=args.email, musthave=args.i, thispair=args.p, fams=args.fams, maxhits=args.max_hits)
+	summarize(args.p1d, args.p2d, args.outdir, minz=args.z_min, maxz=args.z_max, dpi=args.dpi, force=args.clobber, email=args.email, musthave=args.i, thispair=args.p, fams=args.fams, maxhits=args.max_hits, pfamdb=args.pfamdb)

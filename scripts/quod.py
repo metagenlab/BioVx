@@ -11,7 +11,85 @@ import numpy as np
 
 from Bio import SeqIO
 
+def info(*things): print('[INFO]:', *things, file=sys.stderr)
+
 VERBOSITY = 0
+MISTAKEFUDGE = 600
+HYDROPATHY = {'G':-0.400, \
+	 'I':4.500, \
+	 'S':-0.800, \
+	 'Q':-3.500, \
+	 'E':-3.500, \
+	 'A':1.800, \
+	 'M':1.900, \
+	 'T':-0.700, \
+	 'Y':-1.300, \
+	 'H':-3.200, \
+	 'V':4.200, \
+	 'F':2.800, \
+	 'C':2.500, \
+	 'W':-0.900, \
+	 'K':-3.900, \
+	 'L':3.800, \
+	 'P':-1.600, \
+	 'N':-3.500, \
+	 'D':-3.500, \
+	 'R':-4.500, \
+	 'U':0, \
+	 'B':-3.500, \
+	 'J':-3.500, \
+	 'Z':4.150 \
+}
+AMPHIPATHICITY = {'G':0.48, \
+	 'I':1.38, \
+	 'S':-0.18, \
+	 'Q':-0.85, \
+	 'E':-0.74, \
+	 'A':0.62, \
+	 'M':0.64, \
+	 'T':-0.05, \
+	 'Y':0.26, \
+	 'H':-0.4, \
+	 'V':1.08, \
+	 'F':1.19, \
+	 'C':0.29, \
+	 'W':0.81, \
+	 'K':-1.5, \
+	 'L':1.06, \
+	 'P':0.12, \
+	 'N':-0.78, \
+	 'D':-0.90, \
+	 'R':-2.53, \
+	 'U':0, \
+	 'B':-0.84, \
+	 'J':-0.80, \
+	 'Z':1.22 \
+}
+CHARGE = {'G':0.0, \
+	 'I':0.0, \
+	 'S':0.0, \
+	 'Q':0.0, \
+	 'E':-1.0, \
+	 'A':0.0, \
+	 'M':0.0, \
+	 'T':0.0, \
+	 'Y':+0.001, \
+	 'H':+0.1, \
+	 'V':0.0, \
+	 'F':0.0, \
+	 'C':+0.1, \
+	 'W':0.0, \
+	 'K':+1.0, \
+	 'L':0.0, \
+	 'P':0.0, \
+	 'N':0.0, \
+	 'D':-1.0, \
+	 'R':+1.0, \
+	 'U':0, \
+	 'B':-0.5, \
+	 'J':-0.5, \
+	 'Z':0.0 \
+}
 
 def isspans(token):
 	''' checks if a token is a span/range '''
@@ -149,7 +227,7 @@ class Plot(object):
 		if self.height is None: self.height = 5.5
 		self.fig.set_figwidth(self.width)
 		self.fig.set_figheight(self.height)
-		#self.fig.set_tight_layout(True)
+		self.fig.set_tight_layout(True)
 		self.ax.set_xlabel(self.axeslabels[0])
 		self.ax.set_ylabel(self.axeslabels[1])
 
@@ -248,23 +326,31 @@ class Vspans(Entity):
 
 class Region(Vspans):
 	''' little boxes with widths, y-positions, and text but no height '''
-	def __init__(self, spans=[], yspan=[], label='', style='orange', alpha=None, pos='above', size=8):
+	def __init__(self, spans=[], yspan=[], label='', style='orange', alpha=None, pos='above', size=8, center=True):
 		Vspans.__init__(self, spans=spans, style=style, alpha=alpha)
 		self.label = label
 		self.yspan = yspan
 		self.pos = pos
 		self.size = size
+		self.center = center
 
 	def draw(self, plot):
 		''' called when rendering plots '''
 		self.set_color()
-		plot.ax.broken_barh(self.spans, self.yspan, facecolor=self.style, edgecolor=(1,1,1,0.5), zorder=2.0)
 
+		diffspans = [[span[0], span[1]-span[0]] for span in self.spans]
+
+		plot.ax.broken_barh(diffspans, self.yspan, facecolor=self.style, edgecolor=(1,1,1,0.5), zorder=2.0)
+
+		if self.center: xtext = (self.spans[0][0] + self.spans[-1][-1])/2
+		else: xtext = self.spans[0][0]
 		if self.pos == 'above':
-			xytext = [self.spans[0][0], sum(self.yspan)+0.01]
+			xytext = [xtext, sum(self.yspan)+0.01]
 		else:
-			xytext = [self.spans[0][0], self.yspan[0]+0.01]
-		plot.ax.annotate(self.label, xy=xytext, size=self.size)
+			xytext = [xtext, self.yspan[0]+0.01]
+		obj = plot.ax.annotate(self.label, xy=xytext, size=self.size)
+		if self.center: obj.set_horizontalalignment('center')
+		else: obj.set_horizontalalignment('left')
 
 class Wedge(Entity):
 	''' a vertical black bar and a little triangle pointing into the interval '''
@@ -287,8 +373,12 @@ class Wedge(Entity):
 		x = max(plot.xlim[0], min(plot.xlim[1], self.x))
 		plot.ax.axvline(x=x, color=self.style, ymin=ymin, ymax=ymax)
 
+		xlim = plot.ax.get_xlim()
+		if (xlim[1] - xlim[0]) > 600: k = 1
+		else: k = (xlim[1] - xlim[0]) / MISTAKEFUDGE
+
 		if self.scale:
-			x = x + abs(self.scale)**.5 * (self.scale)/abs(self.scale)
+			x = x + abs(self.scale)**.5 * (self.scale)/abs(self.scale) * k
 			if self.y == 0: y = 2
 			else: y = self.y
 
@@ -346,9 +436,14 @@ class Wall(Vspans):
 						if n % 2: marker = '<'
 						else: marker = '>'
 
+					xlim = plot.ax.get_xlim()
 					#wx = x# + (abs(4*self.wedge)**0.5 * np.sign(0.5 - i % 2))
 					#FIXME: make the arrows aligned at any scale
-					wx = x - 2*(abs(self.wedge) * np.sign((i % 2) - 0.5)) - self.wedge*.5
+					xlim = plot.ax.get_xlim()
+					if (xlim[1] - xlim[0]) > 600: k = 1
+					else: k = (xlim[1] - xlim[0]) / MISTAKEFUDGE
+
+					wx = x - (2*(abs(self.wedge) * np.sign((i % 2) - 0.5)) - self.wedge*.5) * k
 
 					if self.y is None: wy = 2
 					else: wy = self.y
@@ -368,6 +463,7 @@ class HMMTOP(Vspans):
 		Vspans.__init__(self, style=style, alpha=alpha)
 		self.spans = []
 
+		gseq = gseq.upper()
 		fasta = gseq
 		#no FASTA? no problem
 
@@ -385,6 +481,8 @@ class HMMTOP(Vspans):
 
 		if not indices: return
 
+		gseq = re.sub('\*', '-', gseq)
+		gseq = gseq.upper()
 		if gseq.startswith('>'): seq = gseq[gseq.find('\n')+1:]
 		else: seq = gseq
 
@@ -486,6 +584,8 @@ class Entropy(Curve):
 		if gseq.startswith('>'):
 			gseq = gseq[gseq.find('\n')+1:]
 			gseq = re.sub('[^A-Z\-]', '', gseq)
+		gseq = gseq.upper()
+		gseq = re.sub('\*', '-', gseq)
 		seq = re.sub('[X\-]', '', gseq)
 		seq = re.sub('[^A-Z]', '', seq)
 		prev = 0
@@ -571,7 +671,7 @@ class Psipred(Curve):
 
 class Hydropathy(Curve):
 	''' a curve where y is the moving average of the hydropathy '''
-	def __init__(self, gseq, style='r', offset=0, window=19):
+	def __init__(self, gseq, style='r', offset=0, window=19, index=HYDROPATHY):
 		''' constructor
 		gseq: sequence
 		style: color specifier (default:'r')
@@ -586,41 +686,18 @@ class Hydropathy(Curve):
 		if gseq.startswith('>'):
 			gseq = gseq[gseq.find('\n')+1:]
 			gseq = re.sub('[^A-Z\-]', '', gseq)
+		gseq = gseq.upper()
+		gseq = re.sub('\*', '-', gseq)
 		seq = re.sub('[X\-]', '', gseq)
 		seq = re.sub('[^A-Z]', '', seq)
 		prev = 0
-		index = {'G':(-0.400,0.48), \
-             'I':(4.500,1.38), \
-             'S':(-0.800,-0.18), \
-			 'Q':(-3.500,-0.85), \
-             'E':(-3.500,-0.74), \
-             'A':(1.800,0.62), \
-             'M':(1.900,0.64), \
-             'T':(-0.700,-0.05), \
-             'Y':(-1.300,0.26), \
-             'H':(-3.200,-0.4), \
-             'V':(4.200,1.08), \
-             'F':(2.800,1.19), \
-             'C':(2.500,0.29), \
-             'W':(-0.900,0.81), \
-             'K':(-3.900,-1.5), \
-             'L':(3.800,1.06), \
-             'P':(-1.600,0.12), \
-             'N':(-3.500,-0.78), \
-             'D':(-3.500,-0.90), \
-             'R':(-4.500,-2.53), \
-             'U':(0,0), \
-             'B':(-3.500,-0.84), \
-             'J':(-3.500,-0.80), \
-             'Z':(4.150,1.22) \
-            }
 
 		midpt = (window+1)//2
 		length = len(seq)
 		hydro = []
 		for i in range(length-window+1):
 			total = 0
-			for j in range(window): total += index[seq[i+j]][0]
+			for j in range(window): total += index[seq[i+j]]
 			total /= window
 			hydro.append(total)
 
@@ -1068,7 +1145,7 @@ def main(infiles, **kwargs):
 				elif color is None: color = token
 				elif isint(token) and size is None: size = int(token)
 
-			for i in range(len(spans)): spans[i][1] = spans[i][1] - spans[i][0]
+			for i in range(len(spans)): spans[i][1] = spans[i][1]# - spans[i][0]
 
 			if y is None: y = -2
 			if label is None: label = 'untitled region'
