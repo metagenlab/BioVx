@@ -186,6 +186,8 @@ class Plot(object):
 		self.axeslabels = ['X', 'Y']
 		self.titles = []
 
+		self.grid = False
+
 		self.entities = []
 
 	def add(self, entity): self.entities.append(entity)
@@ -238,6 +240,8 @@ class Plot(object):
 		for t in self.titles: 
 			if t is not None: title += '{}, '.format(t)
 		self.ax.set_title(title[:-2])
+
+		if self.grid: self.ax.grid('on')
 
 	def save(self, filename, dpi=80, format='png'):
 		''' save plot to disk '''
@@ -1199,6 +1203,8 @@ def main(infiles, **kwargs):
 	if 'entities' in kwargs and kwargs['entities'] is not None: 
 		for e in kwargs['entities']: plot.add(e)
 
+	if 'grid' in kwargs and kwargs['grid']: plot.grid = True
+
 	plot.render()
 
 	if 'axis_font' in kwargs and kwargs['axis_font'] is not None:
@@ -1288,6 +1294,7 @@ if __name__ == '__main__':
 	parser.add_argument('-w', '--walls', metavar='x0-x(:scale(:y))', nargs='+', help='Draws bounds around sequences and such, e.g. "20-45,60-80:0.5:2" draws 2x-scaled markers around the interval [20, 45] and [60, 80] at y=0.5 and "36-60" draws default-scaled (1x) markers around the interval [36, 60] at the default y (y=2)')
 	parser.add_argument('-W', '--wall', metavar='x(:scale(:y))', nargs='+', help='Draws a single wall for each specification, allowing left-pointing intervals with negative scale values. See -w/--walls for more information on syntax.')
 	parser.add_argument('--axis-font', metavar='size', type=int, help='Axis label size (pt)')
+	parser.add_argument('--grid', action='store_true', help='Show grid (default:off)')
 	parser.add_argument('--height', metavar='height', type=float, help='Plot height in inches (default:5.5)')
 	parser.add_argument('--mode', default='hydropathy', help='mode to run QUOD in (\033[1mhydropathy\033[0m, entropy)')
 	parser.add_argument('--tick-font', metavar='size', type=int, help='Tick label size')
@@ -1327,5 +1334,5 @@ if __name__ == '__main__':
 	if args.entropy: mode = 'entropy'
 	elif args.sp: mode = 'psipred'
 
-	main(args.infile, mode=mode, walls=args.walls, wall=args.wall, bars=args.bars, dpi=args.r, imgfmt=args.t, force_seq=args.s, outdir=args.d, outfile=args.o, color=args.color, title=args.title, quiet=args.q, viewer=args.a, axis_font=args.axis_font, width=args.width, height=args.height, x_offset=args.x_offset, add_tms=args.add_tms, delete_tms=args.delete_tms, extend_tms=args.extend_tms, replace_tms=args.replace_tms, no_tms=args.no_tms, tick_font=args.tick_font, add_marker=args.add_marker, add_region=args.add_region, xticks=args.xticks, load_tms=args.load_tms, entropy=args.entropy, window=args.window)
+	main(args.infile, mode=mode, walls=args.walls, wall=args.wall, bars=args.bars, dpi=args.r, imgfmt=args.t, force_seq=args.s, outdir=args.d, outfile=args.o, color=args.color, title=args.title, quiet=args.q, viewer=args.a, axis_font=args.axis_font, width=args.width, height=args.height, x_offset=args.x_offset, add_tms=args.add_tms, delete_tms=args.delete_tms, extend_tms=args.extend_tms, replace_tms=args.replace_tms, no_tms=args.no_tms, tick_font=args.tick_font, add_marker=args.add_marker, add_region=args.add_region, xticks=args.xticks, load_tms=args.load_tms, entropy=args.entropy, window=args.window, grid=args.grid)
 
