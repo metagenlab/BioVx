@@ -285,9 +285,24 @@ class Curve(Entity):
 	def draw(self, plot): 
 		''' called when rendering plots '''
 		self.set_color()
-		if len(Y) and not len(X): 
-			plot.ax.plot(Y, style)
-		else: plot.ax.plot(X, Y, style)
+		#plot.xlim[0] = min(plot.xlim[0], self.X[0])
+		#plot.xlim[1] = max(plot.xlim[1], self.X[-1])
+		if len(self.Y) and not len(self.X): 
+			plot.ax.plot(self.Y, self.style)
+		else: plot.ax.plot(self.X, self.Y, self.style)
+
+	def convolve(self, other, **kwargs):
+		''' convolve with another curve '''
+		out = Curve(**kwargs)
+		out.X = np.copy(self.X[:(abs(len(self.X) - len(other.X)) + 1)])
+		out.Y = np.zeros(len(out.X))
+
+		for i, y_in in enumerate(self.Y[:len(out.Y)]):
+			for j, y_filt in enumerate(other.Y): 
+				try: out.Y[i+j] += y_in * y_filt
+				except IndexError: pass
+		out.X -= len(other.Y)//2
+		return out
 
 class Vspans(Entity):
 	''' things with a width and infinite height '''
@@ -692,8 +707,10 @@ class Hydropathy(Curve):
 			gseq = re.sub('[^A-Z\-]', '', gseq)
 		gseq = gseq.upper()
 		gseq = re.sub('\*', '-', gseq)
+		self.gseq = gseq
 		seq = re.sub('[X\-]', '', gseq)
 		seq = re.sub('[^A-Z]', '', seq)
+		self.seq = seq
 		prev = 0
 
 		midpt = (window+1)//2
@@ -836,6 +853,8 @@ class What(Entity):
 
 		#XXX maybe this goes better under Hydropathy or something
 		plot.titles.append(self.get_title())
+
+	def __iter__(self): return iter(self.entities)
 
 def split_fasta(fastastr):
 	''' split multirecord FASTAs '''
@@ -1019,6 +1038,38 @@ def main(infiles, **kwargs):
 				spans = [indices[i:i+2] for i in range(0, len(indices), 2)]
 				plot.add(HMMTOP('', style=color, alpha=None, nohmmtop=True))
 				plot[-1].spans = spans
+
+	if 'mark_residue' in kwargs and kwargs['mark_residue']:
+		for marker in kwargs['mark_residue']:
+			pos = []
+			color = None
+			index = 0
+			size = 25
+
+			motifs = []
+			for i, token in enumerate(marker.split(':')):
+				if isid(token) and not i: index = parse_id(token)
+				elif not motifs: motifs += token.split(',')
+				else: color = token
+
+			for e in find(plot, What, index):
+				for ee in find(e, Hydropathy):
+					if color is None: color = ee.style
+					pos = []
+					for m in motifs:
+						p = m.replace('X', '.').replace('-', '.?')
+						for hit in re.finditer(p, ee.gseq): 
+							#pos.append(hit.start())
+							pos.append((hit.start() + hit.end())//2)
+					done = []
+					for pair in zip(ee.X, ee.Y):
+						for x in pos:
+							if x == pair[0]:
+								if np.isnan(pair[1]): plot.add(Point([x,0], marker='o', style=color, size=size))
+								else: plot.add(Point(pair, marker='o', style=color, size=size))
+								done.append(x)
+					for x in pos:
+						if x not in done: plot.add(Point([x,0], marker='o', style=color, size=size))
 
 	if 'add_marker' in kwargs and kwargs['add_marker']:
 		for marker in kwargs['add_marker']:
@@ -1307,6 +1358,7 @@ if __name__ == '__main__':
 	parser.add_argument('-ar', '--add-region', metavar='x0-x1(:color)(:"label")', nargs='+')
 
 	parser.add_argument('-am', '--add-marker', metavar='(+id):x1,x2,x3,...xn(:color)', nargs='+', help='Adds a circular marker at the specified positions on the hydropathy curve of the specified sequence')
+	parser.add_argument('-mr', '--mark-residue', metavar='(+id):resn1,resn2,resn3(:color)', nargs='+', help='Adds circular markers on the specified curve on the hydropathy curve of the specified sequence')
 
 	parser.add_argument('-at', '--add-tms', metavar='x0-x1(:color)', nargs='+', help='Adds TMSs to plot, e.g. 40-60:red 65-90:blue to add a red TMS covering residues 40 to 60 and a blue one covering residues 65 to 90 (default color: orange)')
 	parser.add_argument('-dt', '--delete-tms', metavar='(+id):x0-x1,x0-x1', nargs='+', help='Deletes TMSs on plot. Use +id to specify which sequence\'s TMSs should be deleted, e.g. "+0:5-25,30-40" to delete overlapping TMSs predicted for the first sequence and "+2:60-80:red,+4:70-95:blue" to delete overlapping TMSs predicted for the third and fifth sequence. +id specification propagates rightward and defaults to +0.')
@@ -1334,5 +1386,5 @@ if __name__ == '__main__':
 	if args.entropy: mode = 'entropy'
 	elif args.sp: mode = 'psipred'
 
-	main(args.infile, mode=mode, walls=args.walls, wall=args.wall, bars=args.bars, dpi=args.r, imgfmt=args.t, force_seq=args.s, outdir=args.d, outfile=args.o, color=args.color, title=args.title, quiet=args.q, viewer=args.a, axis_font=args.axis_font, width=args.width, height=args.height, x_offset=args.x_offset, add_tms=args.add_tms, delete_tms=args.delete_tms, extend_tms=args.extend_tms, replace_tms=args.replace_tms, no_tms=args.no_tms, tick_font=args.tick_font, add_marker=args.add_marker, add_region=args.add_region, xticks=args.xticks, load_tms=args.load_tms, entropy=args.entropy, window=args.window, grid=args.grid)
+	main(args.infile, mode=mode, walls=args.walls, wall=args.wall, bars=args.bars, dpi=args.r, imgfmt=args.t, force_seq=args.s, outdir=args.d, outfile=args.o, color=args.color, title=args.title, quiet=args.q, viewer=args.a, axis_font=args.axis_font, width=args.width, height=args.height, x_offset=args.x_offset, add_tms=args.add_tms, delete_tms=args.delete_tms, extend_tms=args.extend_tms, replace_tms=args.replace_tms, no_tms=args.no_tms, tick_font=args.tick_font, add_marker=args.add_marker, mark_residue=args.mark_residue, add_region=args.add_region, xticks=args.xticks, load_tms=args.load_tms, entropy=args.entropy, window=args.window, grid=args.grid)
 
