@@ -5,6 +5,7 @@
 from __future__ import division, print_function, division
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
+import matplotlib.patches as patches
 import os, subprocess, re, sys
 import argparse
 import numpy as np
@@ -239,6 +240,8 @@ class Plot(object):
 		title = ''
 		for t in self.titles: 
 			if t is not None: title += '{}, '.format(t)
+		if len(title) > 40: title = title[:40] + '.....'
+
 		self.ax.set_title(title[:-2])
 
 		if self.grid: self.ax.grid('on')
@@ -481,6 +484,7 @@ class HMMTOP(Vspans):
 		'''
 		Vspans.__init__(self, style=style, alpha=alpha)
 		self.spans = []
+		self.topout = ''
 
 		gseq = gseq.upper()
 		fasta = gseq
@@ -516,6 +520,7 @@ class HMMTOP(Vspans):
 
 	def parse_hmmtop(self, topout):
 		''' parse topout into spans '''
+		self.topout = topout
 		if not topout: return []
 		indices = re.findall('(?: IN| OUT)((?:\s*(?:[0-9]+))+)', topout.strip())[0].strip().split()
 		indices = [int(i) for i in indices[1:]]
@@ -588,6 +593,154 @@ class Point(Entity):
 		''' called when rendering plots '''
 		plot.ax.scatter([self.x], [self.y], marker=self.marker, color=self.style, s=self.size)
 		
+class Topoprob(Curve):
+	''' a curve where y is equal to the log probability that HMMTOP's predictions were accurate '''
+	def __init__(self, gseq, topout, style='y', offset=0, window=19, invert_orientation=False, smooth_loops=0):
+		''' constructor
+		gseq: sequence
+		topout: HMMTOP or HMMTOP-like output
+		style: color specifier (default:'y')
+		offset: shift curve this far (default:0)
+		window: window size to compute entropy over (default:19)
+		invert_orientation: use opposite probabilities for O/o/I/i
+		smooth_loops: 0: no (default); 1: assume all O are o and I are i; 2: assume all o are O and i are I
+		'''
+		Curve.__init__(self, style=style)
+		self.window = window
+		if not topout: 
+			self.X = []
+			self.Y = []
+			return
+
+		if gseq.startswith('>'):
+			gseq = gseq[gseq.find('\n')+1:]
+			gseq = re.sub('[^A-Z\-]', '', gseq)
+		gseq = gseq.upper()
+		gseq = re.sub('\*', '-', gseq)
+		seq = re.sub('[X\-]', '', gseq)
+		seq = re.sub('[^A-Z]', '', seq)
+		prev = 0
+
+		window = 5
+		aa2index = dict(zip('ACDEFGHIKLMNPQRSTVWY', range(20)))
+
+		if invert_orientation: state2index = dict(zip('IiOoH', range(5)))
+		else: state2index = dict(zip('OoIiH', range(5)))
+
+		probs = []
+
+		if 'HMMTOP_PSV' in os.environ and os.path.isfile(os.environ['HMMTOP_PSV']): fn = os.environ['HMMTOP_PSV']
+		elif 'hmmtop.psv' in os.listdir('.'): fn = './hmmtop.psv'
+		else: raise IOError('Could not find hmmtop.psv')
+
+		skip = 1
+		states = 5
+		freqs = []
+		with open(fn) as f:
+			for l in f: 
+				if skip: 
+					skip -= 1
+					continue
+				if states:
+					freqs.append([])
+					for i in range(0, len(l), 8): 
+						try: 
+							n = float(l[i:i+8])
+							freqs[-1].append(n)
+						except ValueError: pass
+					states -= 1
+		freqmatrix = np.array(freqs)
+		for i in range(freqmatrix.shape[1]): freqmatrix[:,i] /= sum(freqmatrix[:,i])
+		freqmatrix = np.log2(freqmatrix/0.2)
+
+		tags = {}
+		for resi, resn in enumerate(seq): tags[resi+1] = 'X'
+
+		essentials = re.findall('(?:OUT|IN)(?:(?:\s+[0-9]+)+)\s*$', topout)[0].strip().split()
+		if essentials[0] == 'OUT': tags[0] = 'O'
+		else: tags[0] = 'I'
+
+		spans = []
+		for i in range(int(essentials[1])):
+			span = int(essentials[2*i + 2]), int(essentials[2*i + 2 + 1])
+			spans.append(span)
+			for i in range(span[0], span[1]+1):
+				tags[i] = 'H'
+
+		flipped = False
+		state = 0 if tags[0] == 'O' else 'I'
+		for i in sorted(tags)[1:]:
+			if tags[i] == 'X':
+				if state == 0: tags[i] = 'O'
+				else: tags[i] = 'I'
+				flipped = False
+			elif tags[i] == 'H' and not flipped:
+				state = not state
+				flipped = True
+
+		if smooth_loops == 1:
+			for i in sorted(tags):
+				if tags[i] != 'H': tags[i] = tags[i].lower()
+		if smooth_loops == 2:
+			for i in sorted(tags):
+				if tags[i] != 'H': tags[i] = tags[i].upper()
+		else:
+			for span in spans:
+				for n in range(1, 15+1):
+					i = span[0] - n
+					if (2 <= i <= len(tags)) and (tags[i] != 'H'): 
+						tags[i] = tags[i].lower()
+					i = span[1] + n
+					if (2 <= i <= len(tags)) and (tags[i] != 'H'): 
+						tags[i] = tags[i].lower()
+
+		#s = ''
+		#for resi in sorted(tags): s += '{}'.format(tags[resi])
+		#print(s)
+
+		rawfreqs = []
+		for resi in sorted(tags): 
+			resn = seq[resi-1]
+			aa_i = aa2index[resn]
+			state = tags[resi]
+			s_i = state2index[state]
+			#print(resi, resn, state, freqmatrix[s_i,aa_i])
+			#Y.append(np.log2(freqmatrix[s_i,aa_i]/0.2))
+			rawfreqs.append(freqmatrix[s_i,aa_i])
+		avgfreqs = []
+		for i in range(0, len(rawfreqs) - window):
+			sample = rawfreqs[i:i+window]
+			avgfreqs.append(sum(sample)/len(sample))
+		#print(min(Y), max(Y), sum(Y)/len(Y), np.std(Y))
+
+		if len(gseq) == len(seq):
+			self.Y = np.array(avgfreqs)
+			self.X = np.arange(0, len(self.Y))+window//2+offset+1
+		else:
+			replace = re.finditer('(-+|X+)', gseq)
+			inserts = {}
+			for i in replace: inserts.setdefault(i.start(), i.end()-i.start())
+			first = False
+			newprobs = []
+
+			for x, p in enumerate(avgfreqs):
+				if x in inserts and not first:
+					first = True
+					newprobs += [np.nan for y in range(inserts[x])]
+					newcount = x + inserts[x]
+
+				elif not first: newprobs.append(p)
+
+				elif first and newcount in inserts:
+					newprobs += [np.nan for y in range(inserts[newcount])]
+					newcount += inserts[newcount]
+				else:
+					newprobs.append(p)
+					newcount += 1
+
+			self.Y = np.array(newprobs)
+			self.X = np.arange(offset+1, len(self.Y)+1)+window//2
+
 class Entropy(Curve):
 	''' a curve where y is equal to the average informational content in a window about each residue '''
 	def __init__(self, gseq, style='r', offset=0, window=19):
@@ -760,9 +913,10 @@ class Hydropathy(Curve):
 		plot.axeslabels = ['Residue number', 'Hydropathy (kcal/mol)']
 		plot.ax.plot(self.X, self.Y, color=self.style, linewidth=1)
 
+
 class What(Entity):
 	''' a container with both a curve and HMMTOP vspans '''
-	def __init__(self, seq, style=0, tmscolor=None, linecolor=None, color=None, nohmmtop=False, mode='hydropathy', window=None, predfile=None):
+	def __init__(self, seq, style=0, tmscolor=None, linecolor=None, color=None, nohmmtop=False, mode='hydropathy', window=None, predfile=None, topo_prob=False):
 		''' constructor
 		seq: sequence or input data
 		style: color specifier (default:0)
@@ -802,6 +956,7 @@ class What(Entity):
 			else: self.window = window
 			self.entities.append(Hydropathy(seq, style=self.get_curve_color(), window=self.window))
 		self.entities.append(HMMTOP(self.seq, style=self.get_tms_color(), nohmmtop=nohmmtop))
+		if topo_prob: self.entities.append(Topoprob(seq, topout=self.entities[-1].topout, window=self.window))
 
 	def get_psipred_seq(self, seq):
 		''' obtain sequence given a prediction file '''
@@ -960,6 +1115,7 @@ def main(infiles, **kwargs):
 	else: color = 'auto'
 
 	no_tms = []
+	loadme = {}
 	if 'load_tms' in kwargs and kwargs['load_tms']:
 		n_id = 0
 		n_loads = 0
@@ -979,6 +1135,7 @@ def main(infiles, **kwargs):
 					elif (n_loads % 3) == 2: style = 'purple'
 					else: style = 'orange'
 				x = HMMTOP(gseq='', nohmmtop=True, load=token, style=style)
+				loadme[n_id] = x
 				plot.add(x)
 				n_loads += 1
 		if n_id == 0: no_tms.append(0)
@@ -994,6 +1151,9 @@ def main(infiles, **kwargs):
 	if 'window' in kwargs and kwargs['window'] is not None: window = kwargs['window']
 	else: window = 19
 
+	if 'topo_prob' in kwargs and kwargs['topo_prob']: topo_prob = True
+	else: topo_prob = False
+
 	if 'no_tms' in kwargs and kwargs['no_tms']:
 		for token in kwargs['no_tms']:
 			if not isid(token): raise ValueError('--no-tms: Not an id: "{}"'.format(token))
@@ -1006,12 +1166,14 @@ def main(infiles, **kwargs):
 		for seq in infiles: 
 			if n in no_tms: nohmmtop = 1
 			else: nohmmtop = 0
-			whatkwargs = {'nohmmtop':nohmmtop, 'window':window}
+			whatkwargs = {'nohmmtop':nohmmtop, 'window':window, 'topo_prob':topo_prob}
 			if color == 'auto': whatkwargs['style'] = n
 			else: whatkwargs['color'] = color
 			if mode == 'entropy': whatkwargs['mode'] = 'entropy'
 			elif mode == 'psipred': whatkwargs['mode'] = 'psipred'
 			plot.add(What(seq, **whatkwargs))
+
+			if n in loadme: plot[-1].add(loadme[n])
 			n += 1
 	else:
 		for fn in infiles:
@@ -1019,12 +1181,14 @@ def main(infiles, **kwargs):
 				for seq in split_fasta(f.read().decode('utf-8')):
 					if n in no_tms: nohmmtop = 1
 					else: nohmmtop = 0
-					whatkwargs = {'nohmmtop':nohmmtop, 'window':window}
+					whatkwargs = {'nohmmtop':nohmmtop, 'window':window, 'topo_prob':topo_prob}
 					if color == 'auto': whatkwargs['style'] = n
 					else: whatkwargs['color'] = color
 					if mode == 'entropy': whatkwargs['mode'] = 'entropy'
 					elif mode == 'psipred': whatkwargs['mode'] = 'psipred'
 					plot.add(What(seq, **whatkwargs))
+
+					if n in loadme: plot[-1].add(loadme[n])
 					n += 1
 
 	if 'add_tms' in kwargs and kwargs['add_tms']:
@@ -1349,6 +1513,7 @@ if __name__ == '__main__':
 	parser.add_argument('--height', metavar='height', type=float, help='Plot height in inches (default:5.5)')
 	parser.add_argument('--mode', default='hydropathy', help='mode to run QUOD in (\033[1mhydropathy\033[0m, entropy)')
 	parser.add_argument('--tick-font', metavar='size', type=int, help='Tick label size')
+	parser.add_argument('--topo-prob', action='store_true', help='Plot average HMMTOP log2 emission probabilities')
 	parser.add_argument('--viewer', metavar='viewer', default=None, help='Viewer to be used for opening plots')
 	parser.add_argument('--width', metavar='width', type=float, help='Plot width in inches (default:dynamic)')
 	parser.add_argument('--window', metavar='windowsize', type=int, default=19, help='Window size for hydropathy')
@@ -1386,5 +1551,5 @@ if __name__ == '__main__':
 	if args.entropy: mode = 'entropy'
 	elif args.sp: mode = 'psipred'
 
-	main(args.infile, mode=mode, walls=args.walls, wall=args.wall, bars=args.bars, dpi=args.r, imgfmt=args.t, force_seq=args.s, outdir=args.d, outfile=args.o, color=args.color, title=args.title, quiet=args.q, viewer=args.a, axis_font=args.axis_font, width=args.width, height=args.height, x_offset=args.x_offset, add_tms=args.add_tms, delete_tms=args.delete_tms, extend_tms=args.extend_tms, replace_tms=args.replace_tms, no_tms=args.no_tms, tick_font=args.tick_font, add_marker=args.add_marker, mark_residue=args.mark_residue, add_region=args.add_region, xticks=args.xticks, load_tms=args.load_tms, entropy=args.entropy, window=args.window, grid=args.grid)
+	main(args.infile, mode=mode, walls=args.walls, wall=args.wall, bars=args.bars, dpi=args.r, imgfmt=args.t, force_seq=args.s, outdir=args.d, outfile=args.o, color=args.color, title=args.title, quiet=args.q, viewer=args.a, axis_font=args.axis_font, width=args.width, height=args.height, x_offset=args.x_offset, add_tms=args.add_tms, delete_tms=args.delete_tms, extend_tms=args.extend_tms, replace_tms=args.replace_tms, no_tms=args.no_tms, tick_font=args.tick_font, add_marker=args.add_marker, mark_residue=args.mark_residue, add_region=args.add_region, xticks=args.xticks, load_tms=args.load_tms, entropy=args.entropy, window=args.window, grid=args.grid, topo_prob=args.topo_prob)
 
