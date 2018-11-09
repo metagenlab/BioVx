@@ -13,6 +13,10 @@ import numpy as np
 from Bio import SeqIO
 
 def info(*things): print('[INFO]:', *things, file=sys.stderr)
+def warn(*things): print('[WARNING]:', *things, file=sys.stderr)
+def info(*things): 
+	print('[ERROR]:', *things, file=sys.stderr)
+	exit(1)
 
 VERBOSITY = 0
 MISTAKEFUDGE = 600
@@ -90,6 +94,32 @@ CHARGE = {'G':0.0, \
 	 'B':-0.5, \
 	 'J':-0.5, \
 	 'Z':0.0 \
+}
+#Chothia C. 1976. The nature of the accessible and buried surfaces in proteins. /J Mol Biol/ 105(1):1-12
+SURFACE_AREA = { 
+	'A':115,
+	'B':155,
+	'C':135,
+	'D':150,
+	'E':190,
+	'F':210,
+	'G':75,
+	'H':195,
+	'I':175,
+	'J':165,
+	'K':200,
+	'L':170,
+	'M':185,
+	'N':160,
+	'P':145,
+	'Q':180,
+	'R':225,
+	'S':115,
+	'T':140,
+	'V':155,
+	'W':255,
+	'Y':230,
+	'Z':185
 }
 
 def isspans(token):
@@ -202,10 +232,11 @@ class Plot(object):
 		''' configure plot appropriately '''
 
 		for e in self.entities: 
-			try: e.draw(self)
-			except AttributeError:
-				print(e)
-				raise AttributeError
+			e.draw(self)
+			#try: e.draw(self)
+			#except AttributeError:
+			#	print(e)
+			#	raise AttributeError
 
 		self.ax.set_xlim(left=self.xlim[0], right=self.xlim[1])
 		self.ax.set_ylim(bottom=self.ylim[0], top=self.ylim[1])
@@ -270,6 +301,7 @@ class Curve(Entity):
 		self.X = X
 		self.Y = Y
 		self.style = style
+		self.linewidth = None
 
 	def set_color(self, style=None):
 		''' set Curve color. If style is an int, automatically select from three '''
@@ -285,13 +317,16 @@ class Curve(Entity):
 			if (style % 3 == 2): self.style = 'green'
 		else: self.style = style
 
+	def set_linewidth(self, val):
+		self.linewidth = val
+
 	def draw(self, plot): 
 		''' called when rendering plots '''
 		self.set_color()
 		#plot.xlim[0] = min(plot.xlim[0], self.X[0])
 		#plot.xlim[1] = max(plot.xlim[1], self.X[-1])
 		if len(self.Y) and not len(self.X): 
-			plot.ax.plot(self.Y, self.style)
+			plot.ax.plot(self.Y, self.style, linewidth=self.linewidth)
 		else: plot.ax.plot(self.X, self.Y, self.style)
 
 	def convolve(self, other, **kwargs):
@@ -789,15 +824,18 @@ class Entropy(Curve):
 
 class Psipred(Curve):
 	''' a curve where y is equal to the helix probability (red), sheet probability (yellow), and coil probability (green) as given by PSIPRED '''
-	def __init__(self, pred, style=None, offset=0, window=1):
+	def __init__(self, pred, style=None, offset=0, window=1, highest=False):
 		''' constructor
 		pred: PSIPREd prediction as a str
 		style: color specifier (default:None)
 		offset: shift x-wise (default:0)
 		window: compute moving averages over this many residues (default:1)
+		highest: draw only the highest-valued prediction
 		'''
 		Curve.__init__(self, style=style)
 		self.window = window
+		self.linewidth = 2 if self.linewidth is None else self.linewidth
+		self.highest = highest
 
 		self.parse(pred)
 
@@ -837,9 +875,181 @@ class Psipred(Curve):
 		plot.yticks = 0.2
 
 		plot.axeslabels = ['Residue number', 'Confidence']
-		plot.ax.plot(self.X, self.Ycoil, color='g', linewidth=2)
-		plot.ax.plot(self.X, self.Yhelx, color='r', linewidth=2)
-		plot.ax.plot(self.X, self.Ystrn, color='y', linewidth=2)
+		coilcolor = 'skyblue'
+		if self.highest:
+			for i in range(len(self.Ycoil)):
+				if not i: continue
+				x = self.X[i-1:i+1]
+				yc = self.Ycoil[i-1:i+1]
+				yh = self.Yhelx[i-1:i+1]
+				ys = self.Ystrn[i-1:i+1]
+				maxpred = max(sum(yc), sum(yh), sum(ys))
+				if sum(yc) == maxpred: plot.ax.plot(x, yc, color=coilcolor, linewidth=self.linewidth)
+				elif sum(yh) == maxpred: plot.ax.plot(x, yh, color='darkred', linewidth=self.linewidth)
+				elif sum(ys) == maxpred: plot.ax.plot(x, ys, color='y', linewidth=self.linewidth)
+				else: raise Exception('Impossible value')
+		else:
+			plot.ax.plot(self.X, self.Ycoil, color=coilcolor, linewidth=self.linewidth)
+			plot.ax.plot(self.X, self.Yhelx, color='darkred', linewidth=self.linewidth)
+			plot.ax.plot(self.X, self.Ystrn, color='y', linewidth=self.linewidth)
+class BPeriodicity(Curve):
+	''' a curve representing the strength of the period-2 hydropathy variation '''
+	def __init__(self, gseq, style='r', offset=0, window=11, index=HYDROPATHY):
+		''' constructor
+		gseq: sequence
+		style: color specifier (default:'r')
+		offset: shift x-wise by this amount (default:0)
+		window: window size (default:19)
+		index: index to use for computing y-values (default:HYDROPATHY)
+		'''
+		Curve.__init__(self, style=style)
+		self.window = window
+
+		if gseq.startswith('>'):
+			gseq = gseq[gseq.find('\n')+1:]
+			gseq = re.sub('[^A-Z\-]', '', gseq)
+		gseq = gseq.upper()
+		gseq = re.sub('\*', '-', gseq)
+		self.gseq = gseq
+		seq = re.sub('[X\-]', '', gseq)
+		seq = re.sub('[^A-Z]', '', seq)
+		self.seq = seq
+		prev = 0
+
+		midpt = (window+1)//2
+		length = len(seq)
+		hydro = []
+		for i in range(length-int(np.ceil(window/2)*2)+1):
+			totaly1 = 0.
+			totaly2 = 0.
+			for j in range(int(np.ceil(window/2))*2): 
+				if j % 2: 
+					totaly2 += index[seq[i+j]]
+				else:
+					totaly1 += index[seq[i+j]]
+			hydro.append(abs(totaly1 - totaly2)/window)
+			#print(seq[i:i+j], hydro[-1])
+
+		if len(seq) == len(gseq): 
+			self.Y = np.array(hydro)
+			self.X = np.arange(0, len(self.Y))+window//2+offset+1
+
+		else:
+			replace = re.finditer('(-+|X+)', gseq)
+			inserts = {}
+			for i in replace: inserts.setdefault(i.start(), i.end()-i.start())
+			first = False
+			newhydro = []
+
+			for x, h in enumerate(hydro):
+				if x in inserts and not first:
+					first = True
+					newhydro += [np.nan for y in range(inserts[x])]
+					newcount = x + inserts[x]
+
+				elif not first: newhydro.append(h)
+
+				elif first and newcount in inserts:
+					newhydro += [np.nan for y in range(inserts[newcount])]
+					newcount += inserts[newcount]
+				else:
+					newhydro.append(h)
+					newcount += 1
+
+			self.Y = np.array(newhydro)
+			self.X = np.arange(offset+1, len(self.Y)+1)+window//2
+
+	def draw(self, plot):
+		''' called when rendering plots '''
+		self.set_color()
+		plot.xlim[0] = min(plot.xlim[0], self.X[0] - self.window//2)
+		plot.xlim[1] = max(plot.xlim[1], self.X[-1] + self.window//2)
+
+		plot.ylim[0] = 0
+		plot.ylim[1] = 3
+
+		plot.axeslabels = ['Residue number', 'Difference in average hydropathy (kcal/mol)']
+		plot.ax.plot(self.X, self.Y, color=self.style, linewidth=1)
+
+class HydropathyMoment(Curve):
+	''' a curve where y is the first moment of the hydropathy '''
+	def __init__(self, gseq, style='r', offset=0, window=19, index=HYDROPATHY, moment_angle=100):
+		''' constructor
+		gseq: sequence
+		style: color specifier (default:'r')
+		offset: shift x-wise by this amount (default:0)
+		window: window size (default:19)
+		index: index to use for computing y-values (default:HYDROPATHY)
+		moment_angle: angle jumped every residue
+		'''
+		Curve.__init__(self, style=style)
+		self.window = window
+		self.moment_angle = moment_angle
+
+		if gseq.startswith('>'):
+			gseq = gseq[gseq.find('\n')+1:]
+			gseq = re.sub('[^A-Z\-]', '', gseq)
+		gseq = gseq.upper()
+		gseq = re.sub('\*', '-', gseq)
+		self.gseq = gseq
+		seq = re.sub('[X\-]', '', gseq)
+		seq = re.sub('[^A-Z]', '', seq)
+		self.seq = seq
+		prev = 0
+
+		midpt = (window+1)//2
+		length = len(seq)
+		hydro = []
+		for i in range(length-window+1):
+			totalx, totaly = 0, 0
+			for j in range(window): 
+				totalx += index[seq[i+j]] * np.cos(self.moment_angle * j * np.pi / 180)
+				totaly += index[seq[i+j]] * np.sin(self.moment_angle * j * np.pi / 180)
+			totalx /= window
+			totaly /= window
+			hydro.append((totalx**2 + totaly**2)**.5)
+
+		if len(seq) == len(gseq): 
+			self.Y = np.array(hydro)
+			self.X = np.arange(0, len(self.Y))+window//2+offset+1
+
+		else:
+			replace = re.finditer('(-+|X+)', gseq)
+			inserts = {}
+			for i in replace: inserts.setdefault(i.start(), i.end()-i.start())
+			first = False
+			newhydro = []
+
+			for x, h in enumerate(hydro):
+				if x in inserts and not first:
+					first = True
+					newhydro += [np.nan for y in range(inserts[x])]
+					newcount = x + inserts[x]
+
+				elif not first: newhydro.append(h)
+
+				elif first and newcount in inserts:
+					newhydro += [np.nan for y in range(inserts[newcount])]
+					newcount += inserts[newcount]
+				else:
+					newhydro.append(h)
+					newcount += 1
+
+			self.Y = np.array(newhydro)
+			self.X = np.arange(offset+1, len(self.Y)+1)+window//2
+
+	def draw(self, plot):
+		''' called when rendering plots '''
+		self.set_color()
+		plot.xlim[0] = min(plot.xlim[0], self.X[0] - self.window//2)
+		plot.xlim[1] = max(plot.xlim[1], self.X[-1] + self.window//2)
+
+		plot.ylim[0] = 0
+		plot.ylim[1] *= 2
+
+		plot.axeslabels = ['Residue number', 'Moment of hydropathy (kcal/mol*r)']
+		plot.ax.plot(self.X, self.Y, color=self.style, linewidth=1)
+
 
 class Hydropathy(Curve):
 	''' a curve where y is the moving average of the hydropathy '''
@@ -913,10 +1123,32 @@ class Hydropathy(Curve):
 		plot.axeslabels = ['Residue number', 'Hydropathy (kcal/mol)']
 		plot.ax.plot(self.X, self.Y, color=self.style, linewidth=1)
 
+class SurfaceArea(Hydropathy):
+	''' a curve where y is the moving average of the tripeptide surface area '''
+	def __init__(self, gseq, style='r', offset=0, window=19, index=SURFACE_AREA):
+		''' constructor
+		gseq: sequence
+		style: color specifier (default:'r')
+		offset: shift x-wise by this amount (default:0)
+		window: window size (default:19)
+		'''
+		Hydropathy.__init__(self, gseq=gseq, style=style, offset=offset, window=window, index=index)
+
+	def draw(self, plot):
+		''' called when rendering plots '''
+		self.set_color()
+		plot.xlim[0] = min(plot.xlim[0], self.X[0] - self.window//2)
+		plot.xlim[1] = max(plot.xlim[1], self.X[-1] + self.window//2)
+		plot.ylim[0] = 100
+		plot.ylim[1] = 250
+		plot.yticks = 25
+
+		plot.axeslabels = ['Residue number', 'Surface area (\AA^2)']
+		plot.ax.plot(self.X, self.Y, color=self.style, linewidth=1)
 
 class What(Entity):
 	''' a container with both a curve and HMMTOP vspans '''
-	def __init__(self, seq, style=0, tmscolor=None, linecolor=None, color=None, nohmmtop=False, mode='hydropathy', window=None, predfile=None, topo_prob=False):
+	def __init__(self, seq, style=0, tmscolor=None, linecolor=None, color=None, nohmmtop=False, mode='hydropathy', window=None, predfile=None, topo_prob=False, moment_angle=None):
 		''' constructor
 		seq: sequence or input data
 		style: color specifier (default:0)
@@ -946,17 +1178,35 @@ class What(Entity):
 		if mode == 'entropy':
 			if window is None: self.window = 19
 			else: self.window = window
+			if len(seq) < self.window: error('Sequence is shorter than window length')
 			self.entities.append(Entropy(seq, style=self.get_curve_color(), window=self.window))
 		elif mode == 'psipred':
 			if window is None: self.window = 1
 			else: self.window = window
+			if len(seq) < self.window: error('Sequence is shorter than window length')
 			self.entities.append(Psipred(seq, style=self.get_curve_color(), window=self.window))
+		elif mode == 'surface_area':
+			if window is None: self.window = 19
+			else: self.window = window
+			if len(seq) < self.window: error('Sequence is shorter than window length')
+			self.entities.append(SurfaceArea(seq, style=self.get_curve_color(), window=self.window))
+		elif moment_angle is not None:
+			self.window = 9 if window is None else window
+			if len(seq) < self.window: error('Sequence is shorter than window length')
+			self.entities.append(HydropathyMoment(seq, style=self.get_curve_color(), window=self.window, moment_angle=moment_angle))
+		elif mode == 'bperiodicity': 
+			self.window = 11 if window is None else window
+			if len(seq) < self.window: error('Sequence is shorter than window length')
+			self.entities.append(BPeriodicity(seq, style=self.get_curve_color(), window=self.window))
 		else: 
 			if window is None: self.window = 19
 			else: self.window = window
+			if len(seq) < self.window: error('Sequence is shorter than window length')
 			self.entities.append(Hydropathy(seq, style=self.get_curve_color(), window=self.window))
 		self.entities.append(HMMTOP(self.seq, style=self.get_tms_color(), nohmmtop=nohmmtop))
-		if topo_prob: self.entities.append(Topoprob(seq, topout=self.entities[-1].topout, window=self.window))
+		if topo_prob: 
+			if len(seq) < self.window: error('Sequence is shorter than window length')
+			self.entities.append(Topoprob(seq, topout=self.entities[-1].topout, window=self.window))
 
 	def get_psipred_seq(self, seq):
 		''' obtain sequence given a prediction file '''
@@ -1004,7 +1254,8 @@ class What(Entity):
 	def draw(self, plot):
 		''' called when rendering plots '''
 		#for e in self.entities: e.draw(notitle=True)
-		for e in self.entities: e.draw(plot)
+		for e in self.entities: 
+			e.draw(plot)
 
 		#XXX maybe this goes better under Hydropathy or something
 		plot.titles.append(self.get_title())
@@ -1086,6 +1337,7 @@ def main(infiles, **kwargs):
 		force_seq: force inputs to be interpreted as sequences
 		load_tms: load TMS definitions from a file
 		manual_tms: not implemented
+		moment_angle: plot moments of hydropathy using this angle/residue (deg)
 		no_tms: don't run HMMTOP for these sequence IDs
 		outdir: where to output figure images
 		outfile: what to name figure images
@@ -1145,6 +1397,8 @@ def main(infiles, **kwargs):
 	if 'mode' in kwargs:
 		if kwargs['mode'] == 'entropy': mode = 'entropy'
 		elif kwargs['mode'] == 'psipred': mode = 'psipred'
+		elif kwargs['mode'] == 'surface_area': mode = 'surface_area'
+		elif kwargs['mode'] == 'bperiodicity': mode = 'bperiodicity'
 		else: mode = 'hydropathy'
 	else: mode = 'hydropathy'
 
@@ -1160,17 +1414,24 @@ def main(infiles, **kwargs):
 			#for e in find(entities, What, parse_id(token)):
 			#	for ee in find(e.entities, HMMTOP): ee.spans = []
 			no_tms.append(parse_id(token))
+
+	if 'moment_angle' in kwargs and kwargs['moment_angle']: moment_angle = kwargs['moment_angle']
+	else: moment_angle = None
 				
 	n = 0
 	if 'force_seq' in kwargs and kwargs['force_seq']: 
 		for seq in infiles: 
 			if n in no_tms: nohmmtop = 1
 			else: nohmmtop = 0
-			whatkwargs = {'nohmmtop':nohmmtop, 'window':window, 'topo_prob':topo_prob}
+			whatkwargs = {'nohmmtop':nohmmtop, 'window':window, 'topo_prob':topo_prob, 'moment_angle':moment_angle}
 			if color == 'auto': whatkwargs['style'] = n
 			else: whatkwargs['color'] = color
 			if mode == 'entropy': whatkwargs['mode'] = 'entropy'
 			elif mode == 'psipred': whatkwargs['mode'] = 'psipred'
+			elif mode == 'surface_area': whatkwargs['mode'] = 'surface_area'
+			elif mode == 'bperiodicity': 
+				whatkwargs['mode'] = 'bperiodicity'
+				whatkwargs['window'] = 11
 			plot.add(What(seq, **whatkwargs))
 
 			if n in loadme: plot[-1].add(loadme[n])
@@ -1181,11 +1442,15 @@ def main(infiles, **kwargs):
 				for seq in split_fasta(f.read().decode('utf-8')):
 					if n in no_tms: nohmmtop = 1
 					else: nohmmtop = 0
-					whatkwargs = {'nohmmtop':nohmmtop, 'window':window, 'topo_prob':topo_prob}
+					whatkwargs = {'nohmmtop':nohmmtop, 'window':window, 'topo_prob':topo_prob, 'moment_angle':moment_angle}
 					if color == 'auto': whatkwargs['style'] = n
 					else: whatkwargs['color'] = color
 					if mode == 'entropy': whatkwargs['mode'] = 'entropy'
 					elif mode == 'psipred': whatkwargs['mode'] = 'psipred'
+					elif mode == 'surface_area': whatkwargs['mode'] = 'surface_area'
+					elif mode == 'bperiodicity': 
+						whatkwargs['mode'] = 'bperiodicity'
+						whatkwargs['window'] = 11
 					plot.add(What(seq, **whatkwargs))
 
 					if n in loadme: plot[-1].add(loadme[n])
@@ -1355,6 +1620,9 @@ def main(infiles, **kwargs):
 			label = None
 			color = None
 			size = None
+			if 'region_font' in kwargs and kwargs['region_font'] is not None:
+				size = kwargs['region_font']
+			else: size = None
 			alpha = None
 
 			for token in tokens:
@@ -1492,8 +1760,11 @@ if __name__ == '__main__':
 	parser.add_argument('-b', '--bars', nargs='+', type=int, help='Draws vertical bars at these positions')
 	#-B boxes
 	parser.add_argument('-c', '--color', metavar='color', default='auto', help='Colors EVERYTHING this color')
+	parser.add_argument('-C', metavar='angle', type=float, default=None, help='Compute moments of hydropathy with this angle')
 	parser.add_argument('-d', metavar='outdir', help='Directory to store graphs in (recommended only with autogenerated filenames)')
 	parser.add_argument('-e', '--entropy', action='store_true', help='Plot entropy instead of hydropathy')
+	parser.add_argument('--surface-area', action='store_true', help='Plot surface area instead of hydropathy')
+	parser.add_argument('--bperiodicity', action='store_true', help='Plot period-2 hydropathy curve amplitudes instead of hydropathy')
 	#-f filename
 	#-i flags file
 	parser.add_argument('-l', '--title', metavar='graph_title', help='Label graph with a specific title')
@@ -1521,6 +1792,7 @@ if __name__ == '__main__':
 	parser.add_argument('--xticks', default=None, type=int, help='X tick spacing')
 
 	parser.add_argument('-ar', '--add-region', metavar='x0-x1(:color)(:"label")', nargs='+')
+	parser.add_argument('--region-font', type=int, default=None, help='Font size for region marker in pts, e.g. --region-font 72 (default:8)')
 
 	parser.add_argument('-am', '--add-marker', metavar='(+id):x1,x2,x3,...xn(:color)', nargs='+', help='Adds a circular marker at the specified positions on the hydropathy curve of the specified sequence')
 	parser.add_argument('-mr', '--mark-residue', metavar='(+id):resn1,resn2,resn3(:color)', nargs='+', help='Adds circular markers on the specified curve on the hydropathy curve of the specified sequence')
@@ -1550,6 +1822,8 @@ if __name__ == '__main__':
 	mode = args.mode
 	if args.entropy: mode = 'entropy'
 	elif args.sp: mode = 'psipred'
+	elif args.surface_area: mode = 'surface_area'
+	elif args.bperiodicity: mode = 'bperiodicity'
 
-	main(args.infile, mode=mode, walls=args.walls, wall=args.wall, bars=args.bars, dpi=args.r, imgfmt=args.t, force_seq=args.s, outdir=args.d, outfile=args.o, color=args.color, title=args.title, quiet=args.q, viewer=args.a, axis_font=args.axis_font, width=args.width, height=args.height, x_offset=args.x_offset, add_tms=args.add_tms, delete_tms=args.delete_tms, extend_tms=args.extend_tms, replace_tms=args.replace_tms, no_tms=args.no_tms, tick_font=args.tick_font, add_marker=args.add_marker, mark_residue=args.mark_residue, add_region=args.add_region, xticks=args.xticks, load_tms=args.load_tms, entropy=args.entropy, window=args.window, grid=args.grid, topo_prob=args.topo_prob)
+	main(args.infile, mode=mode, walls=args.walls, wall=args.wall, bars=args.bars, dpi=args.r, imgfmt=args.t, force_seq=args.s, outdir=args.d, outfile=args.o, color=args.color, title=args.title, quiet=args.q, viewer=args.a, axis_font=args.axis_font, width=args.width, height=args.height, x_offset=args.x_offset, add_tms=args.add_tms, delete_tms=args.delete_tms, extend_tms=args.extend_tms, replace_tms=args.replace_tms, no_tms=args.no_tms, tick_font=args.tick_font, add_marker=args.add_marker, mark_residue=args.mark_residue, add_region=args.add_region, xticks=args.xticks, load_tms=args.load_tms, entropy=args.entropy, window=args.window, grid=args.grid, topo_prob=args.topo_prob, moment_angle=args.C, surface_area=args.surface_area, region_font=args.region_font)
 

@@ -49,7 +49,7 @@ def RangeCut(seq,seqID,start,end,outdir,outFile):
 
 		fin_seq += '>{} Residue {} to {}\n'.format(seqID,start,end)
 
-		fin_seq += "".join(sequence[start - 1: end ])
+		fin_seq += '{}\n'.format("".join(sequence[start - 1: end ]))
 
 		writeFile(fin_seq,outdir,outFile,'rangeCut')
 
