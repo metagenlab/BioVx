@@ -25,10 +25,10 @@
 			
 			Each sublist l contains all necessary information about a domain of that protein
 			
-			l-----[ envlope_from(int), envlope_to(int), domain_acc(str), clan_accession(str),........]
-				|_______________________________________________________________________|
-								    |
-				The first 4 elements of l must be in this format. Users are welcome to add more information
+			l-----[ envlope_from(int), envlope_to(int), domain_acc(str), clan_accession(str), 0(color index), 0(layer index)........]
+				|__________________________________________________________________________________________|
+								             |
+				The first 6 elements of l must be in this format. Users are welcome to add more information
 				to the dictionary, elements after the 4th are not relavent to module functions. If the domain
 				has no clan_acc, then the 4th element must be 'N/A'
 
@@ -53,16 +53,13 @@ class Domain_string(object):
 
 	def __setLayer( self, plist ):
         # in a nested loop, check if domains are overlap. overlapped domains will be elevated to a higher layer
-        	i = 0
-		for x in plist:
-			x.append(0)
-
+		i = 0
         	while ( i < len(plist)-1 ):
             		k = i + 1
             		while ( k < len(plist) ):
                 		if int(plist[k][0]) < int(plist[i][1]):
-                		    	if plist[k][len(plist[k])-1] == plist[i][len(plist[i])-1]:
-                	        		plist[k][len(plist[k])-1] = plist[k][len(plist[k])-1] + 1
+                		    	if plist[k][5] == plist[i][5]:
+                	        		plist[k][5] = plist[k][5] + 1
                     		k = k + 1
 
             		i = i + 1
@@ -74,20 +71,20 @@ class Domain_string(object):
 			if x[3] != 'N/A':
         	        	if x[3] not in clan_list:
         	                	clan_list.append(x[3])
-				x.append( clan_list.index(x[3]) )
+				x[4] = clan_list.index(x[3])
 			else:
 				if x[2] not in clan_list:
 					clan_list.append(x[2])
-				x.append( clan_list.index(x[2]) )
+				x[4] = clan_list.index(x[2])
 		for y in plist2:
 			if y[3] != 'N/A':
         	        	if y[3] not in clan_list:
         	                	clan_list.append(y[3])
-				y.append( clan_list.index(y[3]) )
+				y[4] = clan_list.index(y[3])
 			else:
 				if y[2] not in clan_list:
 					clan_list.append(y[2])
-				y.append( clan_list.index(y[2]) )
+				y[4] = clan_list.index(y[2])
 
 	def __setColor_single( self, plist ): # fucntion overloading. It draws colors for a single protein
 	        clan_list = []
@@ -95,11 +92,11 @@ class Domain_string(object):
 			if x[3] != 'N/A':
         	        	if x[3] not in clan_list:
         	                	clan_list.append(x[3])
-				x.append( clan_list.index(x[3]) )
+				x[4] = clan_list.index(x[3])
 			else:
 				if x[2] not in clan_list:
 					clan_list.append(x[2])
-				x.append( clan_list.index(x[2]) )
+				x[4] = clan_list.index(x[2])
 
 	def two_proteins( self, qacc, sacc, pfam_dic, bottom = -2.8, margin = 0.3 ):# for comparing two proteins together
 		self.__setBottom( bottom )
@@ -117,11 +114,11 @@ class Domain_string(object):
 		q_str = '-ar '
 		s_str = '-ar '
 		for x in pfam_dic[qacc]:
-			color = self.__colors[x[len(x)-2]]
-			q_str = q_str + '{f}-{t}:"{text}":{b}:{c} '.format( f=x[0],t=x[1],text=x[2],b=self.__bottom+self.__margin*x[len(x)-1], c=color )
+			color = self.__colors[x[4]]
+			q_str = q_str + '{f}-{t}:"{text}":{b}:{c} '.format( f=x[0],t=x[1],text=x[2],b=self.__bottom+self.__margin*x[5], c=color )
 		for y in pfam_dic[sacc]:
-			color = self.__colors[y[len(y)-2]]
-			s_str = s_str + '{f}-{t}:"{text}":{b}:{c} '.format( f=y[0],t=y[1],text=y[2],b=self.__bottom+self.__margin*y[len(y)-1], c=color )
+			color = self.__colors[y[4]]
+			s_str = s_str + '{f}-{t}:"{text}":{b}:{c} '.format( f=y[0],t=y[1],text=y[2],b=self.__bottom+self.__margin*y[5], c=color )
 
 		result.append(q_str)
 		result.append(s_str)
@@ -139,7 +136,7 @@ class Domain_string(object):
         	# try to produce domain strings and concanate to the end of the result
         	q_str = '-ar '
         	for x in pfam_dic[qacc]:
-        	        color = self.__colors[x[len(x)-2]]
-        	        q_str = q_str + '{f}-{t}:"{text}":{b}:{c} '.format( f=x[0],t=x[1],text=x[2],b=self.__bottom+self.__margin*x[len(x)-1], c=color )
+        	        color = self.__colors[x[4]]
+        	        q_str = q_str + '{f}-{t}:"{text}":{b}:{c} '.format( f=x[0],t=x[1],text=x[2],b=self.__bottom+self.__margin*x[5], c=color )
         	return q_str
 

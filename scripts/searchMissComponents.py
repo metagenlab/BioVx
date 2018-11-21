@@ -14,7 +14,7 @@
  *	       o - overwrite option
  *             l - enable the sequences to be retrieved locally
 '''
-import time
+
 import os
 from StringIO import StringIO
 import sys
@@ -47,7 +47,7 @@ colors = ['red','teal','blue','yellow','purple','maroon','black','pink','green',
  * Parameter: keyword must be a string. The name of the output directory
  * Return type: true or false to indicate if the search is successful or not
 '''
-def retrieve_seq( keywords, out_directory, flag, overwrite ):
+def retrieve_seq( keywords, out_directory, flag, overwrite, redundancy ):
 	cwd = os.getcwd()
 	if not overwrite and os.path.isfile( '{c}/{o}/NCBI_seq.fasta'.format( c=cwd, o=out_directory ) ):
 		return True
@@ -56,7 +56,6 @@ def retrieve_seq( keywords, out_directory, flag, overwrite ):
 		ssl._create_default_https_context = ssl._create_unverified_context
 	Entrez.email = "yiz370@ucsd.edu"
 	handle = Entrez.esearch( db = "protein", term = keywords, retmax = '1000000' )
-	time.sleep(1)
 	record = Entrez.read( handle )
 	# check if the results are greater than 0
 	if record["Count"] == 0:
@@ -74,12 +73,12 @@ def retrieve_seq( keywords, out_directory, flag, overwrite ):
 			os.system( 'blastdbcmd -db nr -entry_batch {o}/NCBI_acc_list.txt -target_only -out {o}/NCBI_seq.fasta'.format( o=outpath ) )
 		else:
 			handle2 = Entrez.efetch( db = "protein", id = idlist, rettype = "fasta", retmode = "text" )
-			with open( outpath+'/NCBI_seq.fasta', 'w' ) as outfile:
+			with open( outpath+'/NCBI_seq_raw.fasta', 'w' ) as outfile:
 				for seq_record in SeqIO.parse(handle2,"fasta"):
 					SeqIO.write(seq_record, outfile, "fasta")
 			outfile.closed
 			# check if the number of sequence is complete or not. If the percentage < 90, download locally and compare with the exsisting file, keep the one with more sequences
-			with open( outpath+'/NCBI_seq.fasta', 'r' ) as infile:
+			with open( outpath+'/NCBI_seq_raw.fasta', 'r' ) as infile:
 				# count the number of '>' in the file
 				text = infile.read().strip()
 				freq = text.count('>')
@@ -89,16 +88,18 @@ def retrieve_seq( keywords, out_directory, flag, overwrite ):
 				# download locally and compare with the Internet version
 				print "Not enough sequences retrieved from the website! Try to retrieve locally."
 				list_to_file('{o}/NCBI_acc_list.txt'.format(o=outpath), idlist)
-				os.system('blastdbcmd -db nr -entry_batch {o}/NCBI_acc_list.txt -target_only -out {o}/NCBI_seq_local.fasta'.format( o=outpath ))
-				with open( outpath+'/NCBI_seq_local.fasta'.format( o=outpath ) ) as local_file:
+				os.system('blastdbcmd -db nr -entry_batch {o}/NCBI_acc_list.txt -target_only -out {o}/NCBI_seq_raw_local.fasta'.format( o=outpath ))
+				with open( outpath+'/NCBI_seq_raw_local.fasta'.format( o=outpath ) ) as local_file:
 					text2 = local_file.read().strip()
 					freq2 = text2.count('>')
 				local_file.closed
 				if freq > freq2:
-					os.system('rm {o}/NCBI_seq_local.fasta'.format( o=outpath ))
+					os.system('rm {o}/NCBI_seq_raw_local.fasta'.format( o=outpath ))
 				else:
-					os.system('rm {o}/NCBI_seq.fasta'.format( o=outpath ))
-					os.system('mv {o}/NCBI_seq_local.fasta {o}/NCBI_seq.fasta'.format( o=outpath ))
+					os.system('rm {o}/NCBI_seq_raw.fasta'.format( o=outpath ))
+					os.system('mv {o}/NCBI_seq_raw_local.fasta {o}/NCBI_seq_raw.fasta'.format( o=outpath ))
+		# remove redundancy
+		os.system( 'cd-hit -i {o}/NCBI_seq_raw.fasta -o {o}/NCBI_seq.fasta -c {r}'.format( o=outpath, r=redundancy ) ) 
 		return True
 
 '''
@@ -152,12 +153,21 @@ def get_output( display ,dcov, overwrite, query, dbname, evalue, coverage, which
 	for rec in blast_records:
 		for alignment in rec.alignments:
 			for hsp in alignment.hsps:
-				xml_list.append([rec.query, alignment.accession, rec.query_length, alignment.length, hsp.align_length, hsp.gaps, hsp.query_start, hsp.query_end, hsp.sbjct_start, hsp.sbjct_end, hsp.expect, hsp.score, 100*float(hsp.identities)/float(hsp.align_length), hsp.query, hsp.match, hsp.sbjct])
+				qacc = rec.query.split()[0]
+				qacc = qacc.split('.')[0]
+				if '|' in qacc:
+					qacc = qacc.split('|')[1]
+				sacc = alignment.accession.split()[0]
+				sacc = sacc.split('.')[0]
+				if '|' in sacc:
+					sacc = sacc.split('|')[1]
+				xml_list.append([qacc, sacc, rec.query_length, alignment.length, hsp.align_length, hsp.gaps, hsp.query_start, hsp.query_end, hsp.sbjct_start, hsp.sbjct_end, hsp.expect, hsp.score, 100*float(hsp.identities)/float(hsp.align_length), hsp.query, hsp.match, hsp.sbjct])
 	df = pd.DataFrame(xml_list, columns=col_list)
 	# calculate the query/subject coverage and add column
-	
+	'''df['sacc'] = df['sacc'].apply(lambda x: x.split()[0])
+	df['qacc'] = df['qacc'].apply(lambda x: x.split()[0])
 	df['sacc'] = df['sacc'].apply(lambda x: x.split('.')[0])
-	df['qacc'] = df['qacc'].apply(lambda x: x.split('.')[0])
+	df['qacc'] = df['qacc'].apply(lambda x: x.split('.')[0])'''
 	df['pident'] = df['pident'].apply(lambda x: int(x))
 	qcovs = []
 	scovs = []
@@ -222,10 +232,10 @@ def get_output( display ,dcov, overwrite, query, dbname, evalue, coverage, which
 	bad_hits_pfam = []
 	no_domain = []
 	for index, row in df.iterrows():
-		if '|' in row["qacc"]:
+		'''if '|' in row["qacc"]:
 			row["qacc"] = row["qacc"].split('|')[1]
 		if '|' in row["sacc"]:
-			row["sacc"] = row["sacc"].split('|')[1]
+			row["sacc"] = row["sacc"].split('|')[1]'''
 		# use set to compare if 2 lists have at least one common element
 		try:
 			if not set(domain_dic[row["qacc"]]) & set(domain_dic[row["sacc"]]):
@@ -301,9 +311,9 @@ def get_output( display ,dcov, overwrite, query, dbname, evalue, coverage, which
 		# insert the hmm info
 		outfile.write( '<center><table style = "width:100%" border = "1"><tr><td>Domain</td><td>Domain_acc</td><td>Domain_len</td><td>Protein_acc</td><td>Protein_len</td><td>evalue</td><td>from</td><td>to</td><td>Clan</td><td>Clan_acc</td></tr>' )
 		for obj in pfam_dic[row["qacc"]]:
-			outfile.write( '<tr><td>{domain}</td><td>{dacc}</td><td>{dlen}</td><td>{pacc}</td><td>{plen}</td><td>{evalue}</td><td>{f}</td><td>{t}</td><td>{clan}</td><td>{cacc}</td></tr>'.format(domain=obj[4],dacc=obj[2],dlen=obj[5],pacc=obj[6],plen=obj[7],evalue=obj[8],f=obj[0],t=obj[1],clan=obj[9],cacc=obj[3]) )
+			outfile.write( '<tr><td>{domain}</td><td>{dacc}</td><td>{dlen}</td><td>{pacc}</td><td>{plen}</td><td>{evalue}</td><td>{f}</td><td>{t}</td><td>{clan}</td><td>{cacc}</td></tr>'.format(domain=obj[6],dacc=obj[2],dlen=obj[7],pacc=obj[8],plen=obj[9],evalue=obj[10],f=obj[0],t=obj[1],clan=obj[11],cacc=obj[3]) )
 		for obj in pfam_dic[row["sacc"]]:
-			outfile.write( '<tr><td>{domain}</td><td>{dacc}</td><td>{dlen}</td><td>{pacc}</td><td>{plen}</td><td>{evalue}</td><td>{f}</td><td>{t}</td><td>{clan}</td><td>{cacc}</td></tr>'.format(domain=obj[4],dacc=obj[2],dlen=obj[5],pacc=obj[6],plen=obj[7],evalue=obj[8],f=obj[0],t=obj[1],clan=obj[9],cacc=obj[3]) )
+			outfile.write( '<tr><td>{domain}</td><td>{dacc}</td><td>{dlen}</td><td>{pacc}</td><td>{plen}</td><td>{evalue}</td><td>{f}</td><td>{t}</td><td>{clan}</td><td>{cacc}</td></tr>'.format(domain=obj[6],dacc=obj[2],dlen=obj[7],pacc=obj[8],plen=obj[9],evalue=obj[10],f=obj[0],t=obj[1],clan=obj[11],cacc=obj[3]) )
 		outfile.write( '</table></center><br>' )
 
 	# Eventually create the result.html file
@@ -377,9 +387,9 @@ def pfam_to_dic( df ):
 	result = {}
 	for index, row in df.iterrows():
 		if index not in result:
-			result[index] = [[row["env_from"],row["env_to"],row["t_accession"],row["clan_acc"],row["target_name"],row["tlen"],index,row["qlen"],row["evalue"],row["clan_info"]]]
+			result[index] = [[row["env_from"],row["env_to"],row["t_accession"],row["clan_acc"],0,0, row["target_name"],row["tlen"],index,row["qlen"],row["evalue"],row["clan_info"]]]
 		else:
-			result[index].append( [row["env_from"],row["env_to"],row["t_accession"],row["clan_acc"],row["target_name"],row["tlen"],index,row["qlen"],row["evalue"],row["clan_info"]] )
+			result[index].append( [row["env_from"],row["env_to"],row["t_accession"],row["clan_acc"],0,0, row["target_name"],row["tlen"],index,row["qlen"],row["evalue"],row["clan_info"]] )
 	return result
 
 def clan_to_dic( col1, col2, df ):
@@ -417,6 +427,7 @@ def main():
 	parser.add_argument( '-ef', '--evalue_filter', type = float, dest = 'evalue_filter', metavar = '<evalue threashold for the result>', default = 0.000001, help = 'an additional filter for blast results. This filter ensures that e-values of all blast results must be equal to or smaller than the threshold. Default threshold is 1e-6' )
 	parser.add_argument( '-dc', '--domain_coverage', type = float, dest = 'dcov', metavar = '<a number between 0-100>', default = 35, help = 'a domain filter for pfam results. Default is 35 percent. Domains which coverages are over the threshold will be considered as true hits.')
 	parser.add_argument( '-al', '--alignment_length', type = int, dest = 'alignment_length', metavar = '<minimum alignment kept by the blast result>', default = 30, help = 'a filter for blast results that keeps alignment length (without gaps) greater than the threshold. Default value is 30')
+	parser.add_argument( '-r', type = float, dest = 'redundancy', metavar = '<sequence identity threashold>', default = 0.9, help = 'a global sequence identity threashold for subject sequences. Default is 0.9. It removes redundant sequences whose similarities are higher than 0.9' )
 	parser.add_argument( '-d', '--display', type = int, dest = 'display', default = 100, help = 'the minimum number of results displayed in the final html output. Default is 100. if the number of blast result is less than the threshold, it will display all results')
 	parser.add_argument( '-out', type = str, dest = 'out', metavar = '<string output_directory>', default = 'MissingComponent_result', help = 'the name, or path and name of the output directory containing all files generated by this program and the final result in html format. Default name is "MissingComponent_result" generated in the current directory' )
 	parser.add_argument( '-o', '--overwrite', action = 'store_true', dest = 'overwrite', default = False, help = 'overwrite all output files. Disabled by default' )
@@ -444,7 +455,7 @@ def main():
 			genomeFile = 'cat {f} | '.format( f=args.genome )
 
 	# retrieve sequences from NCBI and create the output directory, create the blast databse at the same time
-	if retrieve_seq( args.keywords, args.out, args.local, args.overwrite ):
+	if retrieve_seq( args.keywords, args.out, args.local, args.overwrite, args.redundancy ):
 		dbname = create_db( genomeFile, args.out )
 	else:
 		print >> sys.stderr, "No results from NCBI! Try to use other keywords."
