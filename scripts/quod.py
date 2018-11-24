@@ -199,7 +199,7 @@ def hex2tuple(s):
 
 class Plot(object):
 	''' a plot, as in a pair of axes and an area '''
-	def __init__(self, fig=None, canvas=None): 
+	def __init__(self, fig=None, canvas=None, ax=None): 
 		''' constructor
 		fig: Figure object
 		canvas: FigureCanvas object
@@ -207,7 +207,8 @@ class Plot(object):
 		self.fig = Figure() if fig is None else fig
 		self.canvas = FigureCanvas(self.fig) if fig is None else canvas
 
-		self.ax = self.fig.add_subplot(111)
+		if ax is None: self.ax = self.fig.add_subplot(111)
+		else: self.ax = ax
 		self.width, self.height = None, None
 		self.x_offset = 0
 		self.xlim = [0, 20]
@@ -1208,6 +1209,8 @@ class What(Entity):
 			if len(seq) < self.window: error('Sequence is shorter than window length')
 			self.entities.append(Topoprob(seq, topout=self.entities[-1].topout, window=self.window))
 
+	def add(self, entity): self.entities.append(entity)
+
 	def get_psipred_seq(self, seq):
 		''' obtain sequence given a prediction file '''
 		s = ''
@@ -1639,7 +1642,6 @@ def main(infiles, **kwargs):
 			if size is None: size = 8
 
 			plot.add(Region(spans, [y-0.15, 0.15], label, style=color, size=size))
-			#for token in re.split(r':', region): print(token)
 
 	if 'xticks' in kwargs and kwargs['xticks'] is not None: plot.xticks = kwargs['xticks']
 	else: plot.xticks = None
