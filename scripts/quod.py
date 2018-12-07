@@ -2,7 +2,7 @@
 #QUOD2: Questionable Utility of Doom 2
 #most code copied from gblast3.py (which was written by Vamsee Reddy and Vasu Pranav Sai Iddamsetty) except where noted
 #-Kevin Hendargo
-from __future__ import division, print_function, division
+from __future__ import division, print_function, division, unicode_literals
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.patches as patches
@@ -219,6 +219,7 @@ class Plot(object):
 		self.titles = []
 
 		self.grid = False
+		self.tight = True
 
 		self.entities = []
 
@@ -262,7 +263,7 @@ class Plot(object):
 		if self.height is None: self.height = 5.5
 		self.fig.set_figwidth(self.width)
 		self.fig.set_figheight(self.height)
-		self.fig.set_tight_layout(True)
+		if self.tight: self.fig.set_tight_layout(True)
 		self.ax.set_xlabel(self.axeslabels[0])
 		self.ax.set_ylabel(self.axeslabels[1])
 
@@ -292,7 +293,7 @@ class Entity(object):
 
 class Curve(Entity):
 	''' a curve '''
-	def __init__(self, X=[], Y=[], style='auto'):
+	def __init__(self, X=[], Y=[], style='auto', marker='', linestyle='-'):
 		''' constructor
 		X: iterable of floats (default:[])
 		Y: iterable of floats (default:[])
@@ -303,6 +304,9 @@ class Curve(Entity):
 		self.Y = Y
 		self.style = style
 		self.linewidth = None
+		self.linestyle = linestyle
+
+		self.marker = marker
 
 	def set_color(self, style=None):
 		''' set Curve color. If style is an int, automatically select from three '''
@@ -318,8 +322,11 @@ class Curve(Entity):
 			if (style % 3 == 2): self.style = 'green'
 		else: self.style = style
 
-	def set_linewidth(self, val):
-		self.linewidth = val
+	def set_linewidth(self, val): self.linewidth = val
+
+	def set_linestyle(self, newstyle): self.linestyle = newstyle
+
+	def set_marker(self, newmarker): self.marker = newmarker
 
 	def draw(self, plot): 
 		''' called when rendering plots '''
@@ -327,8 +334,8 @@ class Curve(Entity):
 		#plot.xlim[0] = min(plot.xlim[0], self.X[0])
 		#plot.xlim[1] = max(plot.xlim[1], self.X[-1])
 		if len(self.Y) and not len(self.X): 
-			plot.ax.plot(self.Y, self.style, linewidth=self.linewidth)
-		else: plot.ax.plot(self.X, self.Y, self.style)
+			plot.ax.plot(self.Y, self.style, linewidth=self.linewidth, linestyle=self.linestyle, marker=self.marker)
+		else: plot.ax.plot(self.X, self.Y, self.style, linewidth=self.linewidth, linestyle=self.linestyle, marker=self.marker)
 
 	def convolve(self, other, **kwargs):
 		''' convolve with another curve '''
@@ -404,6 +411,8 @@ class Region(Vspans):
 		else: xtext = self.spans[0][0]
 		if self.pos == 'above':
 			xytext = [xtext, sum(self.yspan)+0.01]
+		elif type(self.pos) is float:
+			xytext = [xtext, self.yspan[0] + self.pos + 0.01]
 		else:
 			xytext = [xtext, self.yspan[0]+0.01]
 		obj = plot.ax.annotate(self.label, xy=xytext, size=self.size)
@@ -506,7 +515,10 @@ class Wall(Vspans):
 					if self.y is None: wy = 2
 					else: wy = self.y
 
-					plot.ax.scatter([wx], [wy], marker=marker, color='black', s=25*abs(self.wedge))
+					sc = plot.ax.scatter([wx], [wy], marker=marker, color='black', s=25*abs(self.wedge))
+					#for attr in dir(sc): print(attr)
+					#print(sc.get_paths())
+					#print(sc)
 
 class HMMTOP(Vspans):
 	''' Vspans but based on HMMTOP predictions '''
@@ -533,7 +545,10 @@ class HMMTOP(Vspans):
 		else: 
 			if not fasta.startswith('>'): fasta = '>seq\n' + fasta
 			p = subprocess.Popen(['hmmtop', '-if=--', '-is=pseudo', '-sf=FAS', '-pi=spred'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-			out, err = p.communicate(input=fasta)
+
+			if type(fasta) is not bytes: out, err = p.communicate(input=fasta.encode('utf-8'))
+			else: out, err = p.communicate(input=fasta)
+
 			print(err.strip(), file=sys.stderr)
 
 			indices = self.parse_hmmtop(out)
@@ -556,6 +571,8 @@ class HMMTOP(Vspans):
 
 	def parse_hmmtop(self, topout):
 		''' parse topout into spans '''
+		if type(topout) is bytes: topout = topout.decode('utf-8')
+
 		self.topout = topout
 		if not topout: return []
 		indices = re.findall('(?: IN| OUT)((?:\s*(?:[0-9]+))+)', topout.strip())[0].strip().split()
@@ -1118,11 +1135,12 @@ class Hydropathy(Curve):
 	def draw(self, plot):
 		''' called when rendering plots '''
 		self.set_color()
+		Curve.draw(self, plot)
 		plot.xlim[0] = min(plot.xlim[0], self.X[0] - self.window//2)
 		plot.xlim[1] = max(plot.xlim[1], self.X[-1] + self.window//2)
 
-		plot.axeslabels = ['Residue number', 'Hydropathy (kcal/mol)']
-		plot.ax.plot(self.X, self.Y, color=self.style, linewidth=1)
+		plot.axeslabels = ['Position', 'Hydropathy (kcal/mol)']
+		#plot.ax.plot(self.X, self.Y, color=self.style, linewidth=1)
 
 class SurfaceArea(Hydropathy):
 	''' a curve where y is the moving average of the tripeptide surface area '''
@@ -1211,6 +1229,22 @@ class What(Entity):
 
 	def add(self, entity): self.entities.append(entity)
 
+	def set_tms_color(self, newcolor): self.entities[1].set_color(newcolor)
+
+	def set_curve_color(self, newcolor): self.entities[0].set_color(newcolor)
+
+	def set_marker(self, newmarker): self.entities[0].set_marker(newmarker)
+
+	def set_linestyle(self, newstyle): self.entities[0].set_linestyle(newstyle)
+
+	def set_linewidth(self, newwidth): self.entities[0].set_linewidth(newwidth)
+
+	def set_style(self, style):
+		''' restyle curve and spans '''
+		self.style = style
+		self.entities[0].style = self.get_curve_color()
+		self.entities[1].style = self.get_tms_color()
+
 	def get_psipred_seq(self, seq):
 		''' obtain sequence given a prediction file '''
 		s = ''
@@ -1264,6 +1298,10 @@ class What(Entity):
 		plot.titles.append(self.get_title())
 
 	def __iter__(self): return iter(self.entities)
+
+	def __len__(self):
+		seq = re.sub('\s+', '', self.seq[self.seq.find('\n'):])
+		return len(seq)
 
 def split_fasta(fastastr):
 	''' split multirecord FASTAs '''
