@@ -1,10 +1,21 @@
 #!/usr/bin/env python2
-#QUOD2: Questionable Utility of Doom 2
+#QUOD: Quantitative Visualization of On-membrane Domains
 #most code copied from gblast3.py (which was written by Vamsee Reddy and Vasu Pranav Sai Iddamsetty) except where noted
 #-Kevin Hendargo
 from __future__ import division, print_function, division, unicode_literals
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from matplotlib.figure import Figure
+
+
+import matplotlib
+if __name__ != '__main__':
+	matplotlib.use('Qt4Agg')
+	#from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+	#from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+	from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
+	import matplotlib.pyplot as plt
+
+	from matplotlib.figure import Figure
+	from matplotlib.path import Path
+	from matplotlib import markers
 import matplotlib.patches as patches
 import os, subprocess, re, sys
 import argparse
@@ -19,7 +30,6 @@ def info(*things):
 	exit(1)
 
 VERBOSITY = 0
-MISTAKEFUDGE = 600
 HYDROPATHY = {'G':-0.400, \
 	 'I':4.500, \
 	 'S':-0.800, \
@@ -405,7 +415,8 @@ class Region(Vspans):
 
 		diffspans = [[span[0], span[1]-span[0]] for span in self.spans]
 
-		plot.ax.broken_barh(diffspans, self.yspan, facecolor=self.style, edgecolor=(1,1,1,0.5), zorder=2.0)
+		#plot.ax.broken_barh(diffspans, self.yspan, facecolor=self.style, edgecolor=(1,1,1,0.25), zorder=2.0)
+		plot.ax.broken_barh(diffspans, self.yspan, facecolor=self.style, zorder=2.0)
 
 		if self.center: xtext = (self.spans[0][0] + self.spans[-1][-1])/2
 		else: xtext = self.spans[0][0]
@@ -458,7 +469,7 @@ class Wedge(Entity):
 
 class Wall(Vspans):
 	''' vertical black bars with little triangles pointing into the interval '''
-	def __init__(self, spans=[], y=None, ylim=[0,1], style='black', wedge=1, single=False):
+	def __init__(self, spans=[], y=None, ylim=[0,1], style='black', wedge=1, single=False, thickness=1.0):
 		''' constructor
 		spans: iterable of iterables defining intervals, e.g. [[20, 45], [60, 80]] (default:[])
 		y: position of triangle (default:None)
@@ -472,6 +483,7 @@ class Wall(Vspans):
 		self.ylim = ylim
 		self.wedge = wedge
 		self.single = single
+		self.thickness = thickness
 
 	def get_y(self):
 		''' get y '''
@@ -492,7 +504,7 @@ class Wall(Vspans):
 		ylim = self.get_ylim()
 		for span in self.spans:
 			for i, x in enumerate(span): 
-				plot.ax.axvline(x=x, color='black', ymin=ylim[0], ymax=ylim[1])
+				plot.ax.axvline(x=x, color='black', ymin=ylim[0], ymax=ylim[1], linewidth=self.thickness)
 				if self.wedge:
 					if self.single:
 						if self.wedge >= 0: marker = '>'
@@ -504,21 +516,20 @@ class Wall(Vspans):
 						else: marker = '>'
 
 					xlim = plot.ax.get_xlim()
-					#wx = x# + (abs(4*self.wedge)**0.5 * np.sign(0.5 - i % 2))
-					#FIXME: make the arrows aligned at any scale
-					xlim = plot.ax.get_xlim()
-					if (xlim[1] - xlim[0]) > 600: k = 1
-					else: k = (xlim[1] - xlim[0]) / MISTAKEFUDGE
 
-					wx = x - (2*(abs(self.wedge) * np.sign((i % 2) - 0.5)) - self.wedge*.5) * k
+					wx = x
 
 					if self.y is None: wy = 2
 					else: wy = self.y
 
-					sc = plot.ax.scatter([wx], [wy], marker=marker, color='black', s=25*abs(self.wedge))
-					#for attr in dir(sc): print(attr)
-					#print(sc.get_paths())
-					#print(sc)
+					#adapted from https://stackoverflow.com/questions/26686722/align-matplotlib-scatter-marker-left-and-or-right
+					direction = -1 if marker == '<' else 1
+					mbase = markers.MarkerStyle(marker)
+					marr = mbase.get_path().transformed(mbase.get_transform()).vertices 
+					marr[:,0] += np.sign(direction)*0.5
+					mobj = Path(marr, mbase.get_path().codes)
+
+					sc = plot.ax.scatter([wx], [wy], marker=mobj, color='black', s=25*abs(self.wedge), zorder=3)
 
 class HMMTOP(Vspans):
 	''' Vspans but based on HMMTOP predictions '''
@@ -1393,19 +1404,34 @@ def main(infiles, **kwargs):
 		xticks: x-tick interval
 	'''
 
-	#grep -o 'kwargs\[.*:' quod.py | sed "s/kwargs\[\'//g;s/']//g;s/is not None//g;s/mode == '//g;s/'//g;s/ //g" | sort | uniq | pbcopy
-	plot = Plot()
+	interactive = kwargs.get('interactive', False)
+	if interactive:
+		matplotlib.use('Qt4Agg')
+		#from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+		#from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+		from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
+	else:
+		matplotlib.use('TkAgg')
+		from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+		
+	import matplotlib.pyplot as plt
 
-	if 'width' in kwargs: width = kwargs['width']
-	else: width = None
-	if 'height' in kwargs: height = kwargs['height']
-	else: height = None
+	from matplotlib.figure import Figure
+	from matplotlib.path import Path
+	from matplotlib import markers
+
+
+	#grep -o 'kwargs\[.*:' quod.py | sed "s/kwargs\[\'//g;s/']//g;s/is not None//g;s/mode == '//g;s/'//g;s/ //g" | sort | uniq | pbcopy
+	fig = plt.figure()
+	plot = Plot(fig=fig)
+
+	width = kwargs.get('width', None)
+	height = kwargs.get('height', None)
 
 	plot.width = width
 	plot.height = height
 
-	if 'color' in kwargs and kwargs['color'] is not None: color = kwargs['color']
-	else: color = 'auto'
+	color = kwargs.get('color', 'auto')
 
 	no_tms = []
 	loadme = {}
@@ -1443,11 +1469,9 @@ def main(infiles, **kwargs):
 		else: mode = 'hydropathy'
 	else: mode = 'hydropathy'
 
-	if 'window' in kwargs and kwargs['window'] is not None: window = kwargs['window']
-	else: window = 19
+	window = kwargs.get('window', 19)
 
-	if 'topo_prob' in kwargs and kwargs['topo_prob']: topo_prob = True
-	else: topo_prob = False
+	topo_prob = kwargs.get('topo_prob', False)
 
 	if 'no_tms' in kwargs and kwargs['no_tms']:
 		for token in kwargs['no_tms']:
@@ -1456,8 +1480,7 @@ def main(infiles, **kwargs):
 			#	for ee in find(e.entities, HMMTOP): ee.spans = []
 			no_tms.append(parse_id(token))
 
-	if 'moment_angle' in kwargs and kwargs['moment_angle']: moment_angle = kwargs['moment_angle']
-	else: moment_angle = None
+	moment_angle = kwargs.get('moment_angle', None)
 				
 	n = 0
 	if 'force_seq' in kwargs and kwargs['force_seq']: 
@@ -1681,17 +1704,14 @@ def main(infiles, **kwargs):
 
 			plot.add(Region(spans, [y-0.15, 0.15], label, style=color, size=size))
 
-	if 'xticks' in kwargs and kwargs['xticks'] is not None: plot.xticks = kwargs['xticks']
-	else: plot.xticks = None
+	plot.xticks = kwargs.get('xticks', None)
 
 	if 'bars' in kwargs and kwargs['bars'] is not None: 
 		[plot.add(wall) for wall in parse_walls(kwargs['bars'], wedge=0)]
 
-	if 'dpi' in kwargs: dpi = kwargs['dpi']
-	else: dpi = 80
+	dpi = kwargs.get('dpi', 80)
 
-	if 'imgfmt' in kwargs: imgfmt = kwargs['imgfmt']
-	else: imgfmt = 'png'
+	imgfmt = kwargs.get('imgfmt', 'png')
 
 	if 'walls' in kwargs and kwargs['walls'] is not None: 
 		[plot.add(wall) for wall in parse_walls(kwargs['walls'])]
@@ -1699,22 +1719,19 @@ def main(infiles, **kwargs):
 	if 'wall' in kwargs and kwargs['wall'] is not None:
 		[plot.add(wall) for wall in parse_walls(kwargs['wall'], single=1)]
 
-	if 'outdir' in kwargs and kwargs['outdir']: prefix = kwargs['outdir']
-	else: prefix = ''
+	prefix = kwargs.get('outdir', '')
+	if not prefix: prefix = ''
 
 	if 'outfile' in kwargs and kwargs['outfile']: 
 		if prefix: outfile = '{}/{}'.format(prefix, kwargs['outfile'])
 		else: outfile = '{}'.format(kwargs['outfile'])
 	else: outfile = None
 
-	if 'quiet' in kwargs: quiet = kwargs['quiet']
-	else: quiet = True
+	quiet = kwargs.get('quiet', True)
 
-	if 'viewer' in kwargs: viewer = kwargs['viewer']
-	else: viewer = None
+	viewer = kwargs.get('viewer', None)
 
-	if 'title' in kwargs and kwargs['title'] is not None: title = kwargs['title']
-	else: title = None
+	title = kwargs.get('title', None)
 
 	if 'x_offset' in kwargs and kwargs['x_offset'] is not None: x_offset = kwargs['x_offset']
 	else: x_offset = 0
@@ -1726,7 +1743,7 @@ def main(infiles, **kwargs):
 	if 'entities' in kwargs and kwargs['entities'] is not None: 
 		for e in kwargs['entities']: plot.add(e)
 
-	if 'grid' in kwargs and kwargs['grid']: plot.grid = True
+	plot.grid = kwargs.get('grid', False)
 
 	plot.render()
 
@@ -1750,7 +1767,9 @@ def main(infiles, **kwargs):
 	if prefix not in outfile: outfile = '{}/{}'.format(prefix, outfile)
 	plot.save(outfile, dpi=dpi, format=imgfmt)
 
-	if not quiet:
+	if interactive:
+		plt.show()
+	elif not quiet:
 		if viewer is None:
 			if sys.platform.startswith('linux'): viewer = 'xdg-open'
 			elif sys.platform.startswith('darwin'): viewer = 'open'
@@ -1823,6 +1842,7 @@ if __name__ == '__main__':
 	parser.add_argument('--grid', action='store_true', help='Show grid (default:off)')
 	parser.add_argument('--height', metavar='height', type=float, help='Plot height in inches (default:5.5)')
 	parser.add_argument('--mode', default='hydropathy', help='mode to run QUOD in (\033[1mhydropathy\033[0m, entropy)')
+	parser.add_argument('--show', action='store_true', help='show plot in interactive mode')
 	parser.add_argument('--tick-font', metavar='size', type=int, help='Tick label size')
 	parser.add_argument('--topo-prob', action='store_true', help='Plot average HMMTOP log2 emission probabilities')
 	parser.add_argument('--viewer', metavar='viewer', default=None, help='Viewer to be used for opening plots')
@@ -1865,5 +1885,5 @@ if __name__ == '__main__':
 	elif args.surface_area: mode = 'surface_area'
 	elif args.bperiodicity: mode = 'bperiodicity'
 
-	main(args.infile, mode=mode, walls=args.walls, wall=args.wall, bars=args.bars, dpi=args.r, imgfmt=args.t, force_seq=args.s, outdir=args.d, outfile=args.o, color=args.color, title=args.title, quiet=args.q, viewer=args.a, axis_font=args.axis_font, width=args.width, height=args.height, x_offset=args.x_offset, add_tms=args.add_tms, delete_tms=args.delete_tms, extend_tms=args.extend_tms, replace_tms=args.replace_tms, no_tms=args.no_tms, tick_font=args.tick_font, add_marker=args.add_marker, mark_residue=args.mark_residue, add_region=args.add_region, xticks=args.xticks, load_tms=args.load_tms, entropy=args.entropy, window=args.window, grid=args.grid, topo_prob=args.topo_prob, moment_angle=args.C, surface_area=args.surface_area, region_font=args.region_font)
+	main(args.infile, mode=mode, walls=args.walls, wall=args.wall, bars=args.bars, dpi=args.r, imgfmt=args.t, force_seq=args.s, outdir=args.d, outfile=args.o, color=args.color, title=args.title, quiet=args.q, viewer=args.a, axis_font=args.axis_font, width=args.width, height=args.height, x_offset=args.x_offset, add_tms=args.add_tms, delete_tms=args.delete_tms, extend_tms=args.extend_tms, replace_tms=args.replace_tms, no_tms=args.no_tms, tick_font=args.tick_font, add_marker=args.add_marker, mark_residue=args.mark_residue, add_region=args.add_region, xticks=args.xticks, load_tms=args.load_tms, entropy=args.entropy, window=args.window, grid=args.grid, topo_prob=args.topo_prob, moment_angle=args.C, surface_area=args.surface_area, region_font=args.region_font, interactive=args.show)
 

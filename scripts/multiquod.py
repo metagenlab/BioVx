@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 
 from __future__ import print_function, division, unicode_literals
+import matplotlib
+matplotlib.use('Qt4Agg')
+from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from matplotlib.figure import Figure 
 import matplotlib.gridspec as gridspec
 from collections import defaultdict
 import shlex
@@ -11,7 +13,7 @@ import os
 import re
 import numpy as np
 
-import quod
+import quod as quod
 
 def blank_config():
 	#TODO: encapsulate stuff to plot-specific classes
@@ -41,7 +43,14 @@ def blank_config():
 	cfg['walls'] = {}
 
 	return cfg
-	
+
+def adj_font(args, cfg):
+	name = args[0]
+	if 'font' not in cfg: cfg['font'] = {}
+	if name not in cfg['font']: cfg['font'][name] = {}
+	try: cfg['font'][name][args[1]] = float(args[2])
+	except ValueError: cfg['font'][name][args[1]] = args[2]
+
 def set_prop(args, cfg):
 
 	if len(args) < 1: raise TypeError('Not enough arguments')
@@ -59,6 +68,7 @@ def set_prop(args, cfg):
 		)
 		intprops = (
 			'hres',
+			'dpi',
 		)
 		strprops = (
 			'mode'
@@ -107,6 +117,7 @@ def set_prop(args, cfg):
 
 			try: cfg[args[0]][args[1]][int(args[2])] = float(args[3])
 			except KeyError: cfg[args[0]][args[1]] = {int(args[2]):float(args[3])}
+		elif args[0] == 'font': adj_font(args[1:], cfg)
 	elif len(args) >= 4:
 		if args[0] == 'color':
 			if args[1] not in cfg[args[0]]: cfg[args[0]][args[1]] = defaultdict(lambda: {'line':'red', 'tms':'orange'}, {})
@@ -205,8 +216,11 @@ def add_walls(args, cfg):
 		else: lim = None
 	else: lim = None
 
-	try: cfg['walls'][name].append({'start':start, 'end':end, 'y':y, 'lim':lim})
-	except KeyError: cfg['walls'][name] = [{'start':start, 'end':end, 'y':y, 'lim':lim}]
+	if len(args) >= 6: thickness = float(args[5])
+	else: thickness = 1.0
+
+	try: cfg['walls'][name].append({'start':start, 'end':end, 'y':y, 'lim':lim, 'thickness':thickness})
+	except KeyError: cfg['walls'][name] = [{'start':start, 'end':end, 'y':y, 'lim':lim, 'thickness':thickness}]
 	return cfg
 
 def parse_config(f):
@@ -215,10 +229,10 @@ def parse_config(f):
 	f.seek(0)
 
 	for linenum, l in enumerate(f):
+		if not l.strip(): continue
+		elif l.strip().startswith('#'): continue
 		cmd = shlex.split(l)
-		if not cmd: continue
-		elif cmd[0].startswith('#'): continue
-		elif cmd[0] == 'addrow':
+		if cmd[0] == 'addrow':
 			cfg['rowscheme'].append([])
 			cfg['n_rows'] += 1
 			for name in cmd[1:]:
@@ -373,6 +387,7 @@ def do_tms_stuff(entities, cfg):
 			for i in range(3, len(cmd), 2): spans.append([int(x) for x in cmd[i:i+2]])
 
 			si = 0
+			seqi = int(cmd[2])
 			found = False
 
 			#TODO: automerge eraser targets
@@ -442,7 +457,7 @@ def run_quod(cfg):
 			#walls
 			if name in cfg['walls']:
 				for walldef in cfg['walls'][name]:
-					entities[name].append(quod.Wall(spans=[[walldef['start'], walldef['end']]], y=walldef['y'], ylim=walldef['lim']))
+					entities[name].append(quod.Wall(spans=[[walldef['start'], walldef['end']]], y=walldef['y'], ylim=walldef['lim'], thickness=walldef['thickness'], wedge=walldef['thickness']))
 
 			#domains
 			if name in cfg['domains']:
@@ -487,7 +502,7 @@ def run_quod(cfg):
 			row = [cfg['weights'][name] for name in namelist]
 			last = -hgap
 			if len(namelist) == 1: 
-				cfg['lims'][name] = [0, cfg['hres']]
+				cfg['lims'][namelist[0]] = [0, cfg['hres']]
 			else:
 				bounds = [0]
 
@@ -509,6 +524,8 @@ def run_quod(cfg):
 					name = namelist[i]
 					cfg['lims'][name] = [bounds[2*i], bounds[2*i + 1]]
 
+
+
 		axdict = {}
 		for r, row in enumerate(cfg['rowscheme']):
 			for name in row:
@@ -517,8 +534,14 @@ def run_quod(cfg):
 			
 
 		n = 0
+		name2row = {}
+		stretchlabel = {}
+		firstcol = set()
+
 		for r, row in enumerate(cfg['rowscheme']):
 			for c, name in enumerate(row):
+				if not c: firstcol.add(name)
+				name2row[name] = r
 				if 'ylabel' in cfg and name in cfg['ylabel']: ylabel = cfg['ylabel'][name]
 				else: ylabel = '' if c else None
 				yticks = [] if c else None
@@ -535,9 +558,39 @@ def run_quod(cfg):
 				ax.set_frame_on(False)
 				#TODO: expose customizing xlabels per-plot/per-row
 				ax.set_xlabel('Position')
+				ax.tick_params(labelcolor=(0,0,0,0), color=(0,0,0,0))
+				stretchlabel[r] = ax
 			elif len(row) == 1:
-				ax = fig.add_subplot(gs[r,:])
+				#ax = fig.add_subplot(gs[r,:])
+				ax = axdict[row[0]]
 				ax.set_xlabel('Position')
+				stretchlabel[r] = ax
+
+		if 'xlabel' in cfg:
+			for name in cfg['xlabel']:
+				stretchlabel[name2row[name]].set_xlabel(cfg['xlabel'][name])
+		if 'ylabel' in cfg:
+			for name in cfg['ylabel']:
+				stretchlabel[name2row[name]].set_ylabel(cfg['ylabel'][name])
+
+		if 'font' in cfg:
+			for name in cfg['font']:
+				for target in cfg['font'][name]:
+					if target.endswith('ticks'):
+						axdict[name].tick_params(labelsize=cfg['font'][name][target])
+						if name in firstcol:
+							stretchlabel[name2row[name]].tick_params(labelsize=cfg['font'][name][target])
+					elif target.endswith('xaxis'):
+						axdict[name].set_xlabel(axdict[name].get_xlabel(), 
+							fontsize=cfg['font'][name][target])
+						stretchlabel[name2row[name]].set_xlabel(stretchlabel[name2row[name]].get_xlabel(), 
+							fontsize=cfg['font'][name][target])
+					elif target.endswith('yaxis'):
+						axdict[name].set_ylabel(axdict[name].get_ylabel(), 
+							fontsize=cfg['font'][name][target])
+					elif target == 'title':
+						axdict[name].set_title(axdict[name].get_title(),
+							fontsize=cfg['font'][name][target])
 
 
 		#gs.tight_layout(fig, pad=cfg['margin'], w_pad=cfg['hgap'], h_pad=0.0)
