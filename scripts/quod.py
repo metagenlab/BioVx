@@ -1405,6 +1405,7 @@ def main(infiles, **kwargs):
 	'''
 
 	interactive = kwargs.get('interactive', False)
+	import matplotlib
 	if interactive:
 		matplotlib.use('Qt4Agg')
 		#from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -1419,6 +1420,12 @@ def main(infiles, **kwargs):
 	from matplotlib.figure import Figure
 	from matplotlib.path import Path
 	from matplotlib import markers
+
+	global markers
+	global Path
+	global Figure
+	global Plt
+	global FigureCanvas
 
 
 	#grep -o 'kwargs\[.*:' quod.py | sed "s/kwargs\[\'//g;s/']//g;s/is not None//g;s/mode == '//g;s/'//g;s/ //g" | sort | uniq | pbcopy
