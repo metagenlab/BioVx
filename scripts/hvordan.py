@@ -202,18 +202,14 @@ def seek_initial(p1ds, bcs):
 				if not l.strip(): continue
 				if l.lstrip().startswith('#'): continue
 				if '\t' not in l: continue
+				if '#' in l: continue
 
 				ls = l.split('\t')
 
-				#if 'CUU05502' in l: print(ls)
-				#if '4.D.1.1.1-Q52257' in l: print(ls)
-
 				try: 
 					hits[bc][ls[1]].append((float(ls[4]), ls[0], (int(ls[6]), int(ls[7])), (int(ls[9]), int(ls[10]))))
-					#if 'WP_051443908' in l: 
-					#	print(hits[bc][ls[1]])
-					#	exit()
-				except KeyError: hits[bc][ls[1]] = [(float(ls[4]), ls[0], (int(ls[6]), int(ls[7])), (int(ls[9]), int(ls[10])))]
+				except KeyError: 
+					hits[bc][ls[1]] = [(float(ls[4]), ls[0], (int(ls[6]), int(ls[7])), (int(ls[9]), int(ls[10])))]
 
 	for fam in sorted(bcs):
 		for bc in sorted(hits[fam]): 
