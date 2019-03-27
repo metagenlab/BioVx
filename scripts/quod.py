@@ -1436,13 +1436,19 @@ def main(infiles, **kwargs):
 
 	interactive = kwargs.get('interactive', False)
 	import matplotlib
-	if interactive:
-		matplotlib.use('Qt4Agg')
-		#from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-		#from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-		from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
+	if 'DISPLAY' in os.environ:
+		if interactive:
+			matplotlib.use('Qt4Agg')
+			#from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+			#from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+			from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
+		else:
+			matplotlib.use('TkAgg')
+			from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 	else:
-		matplotlib.use('TkAgg')
+		if interactive: warn('no display name and no $DISPLAY environment variable, reverting to headless mode')
+
+		matplotlib.use('Agg')
 		from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 		
 	import matplotlib.pyplot as plt
