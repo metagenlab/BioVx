@@ -685,9 +685,9 @@ if __name__=="__main__":
                     default=False,
                     help="Use e-value as the preliminary criteria for sorting (otherwise sorted by TCID)"
     )
-    opts.add_option('--db_file',
+    opts.add_option('--db_path',
                     type='str',
-                    dest='db_file',
+                    dest='db_path',
                     default=False,
                     help="Path to save TCDB database [$HOME/db/]"
     )
@@ -733,7 +733,7 @@ if __name__=="__main__":
     '''
     (cli,args)=opts.parse_args()
     if cli.input is not None and cli.output is not None:
-        GB = Tools(db_path=cli.db_file,
+        GB = Tools(db_path=cli.db_path,
                    update_db=cli.check_update)
         GB.ortho  = False
         GB.indir  = cli.output
