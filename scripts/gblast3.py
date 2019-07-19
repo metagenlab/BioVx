@@ -25,9 +25,17 @@ resource.setrlimit(rsrc, (1073741824, hard)) #limit to one gig, omg..
 
 class Tools:
 
-    def __init__(self):
-        self.dbfile = '/db/tcdb'
-        self.tcdb = os.environ['HOME']+self.dbfile
+    def __init__(self,
+                 db_path=False,
+                 update_db=True):
+        
+        if not db_path:
+            self.tcdb = os.path.join(os.environ['HOME'], '/db/tcdb')
+            self.betabarrel = os.path.join(os.environ['HOME'], '/db/betabarrel')
+        else:
+            self.tcdb = os.path.join(db_path, 'tcdb')
+            self.betabarrel = os.path.join(db_path, 'betabarrel')
+        self.update = update_db
         self.query = False
         self.indir = False
         self.goodresults  = []
@@ -60,8 +68,10 @@ class Tools:
         self.tcdbHits = {}        
 
         #self.substrates = tcdb.Substrates()
-        tcdb.use_local()
-        tcdb.use_local_betabarrel()
+        tcdb.use_local(self.tcdb,
+                       self.update)
+        tcdb.use_local_betabarrel(self.betabarrel,
+                                  self.update)
 
     def blast_all(self):
         try:
@@ -675,6 +685,20 @@ if __name__=="__main__":
                     default=False,
                     help="Use e-value as the preliminary criteria for sorting (otherwise sorted by TCID)"
     )
+    opts.add_option('--db_file',
+                    type='str',
+                    dest='db_file',
+                    default=False,
+                    help="Path to save TCDB database [$HOME/db/]"
+    )
+    opts.add_option('--check_update',
+                    action='store_true',
+                    dest='check_update',
+                    default=False,
+                    help="Update database if more than 5 days old  [False]"
+    )
+
+
     '''    
     opts.add_option('--betabarrel',
                     action='store_true',
@@ -709,9 +733,8 @@ if __name__=="__main__":
     '''
     (cli,args)=opts.parse_args()
     if cli.input is not None and cli.output is not None:
-        GB = Tools()
-        #if(cli.bb):
-            #GB.dbfile = '/db/betabarrel'
+        GB = Tools(db_path=cli.db_file,
+                   update_db=cli.check_update)
         GB.ortho  = False
         GB.indir  = cli.output
         GB.cdd_on = False

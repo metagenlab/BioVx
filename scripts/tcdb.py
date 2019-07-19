@@ -55,41 +55,41 @@ def download_fasta(out):
 def prep_db(path):
     locald = '/'.join(path.split('/')[0:-1])
     if not os.path.exists(locald):
-        os.mkdir(locald)
+        os.makedirs(locald)
     urllib.urlretrieve("http://tcdb.org/public/tcdb", path)
     os.system('makeblastdb -dbtype prot -in '+path)
 
 def prep_bb(path):
     urllib.urlretrieve("http://tcdb.org/public/betabarrel", path)
 
-def use_local(path='/db/tcdb'):
-    local = os.environ['HOME']+path
-    if os.path.exists(local) is False:
-        prep_db(local)
+def use_local(path, update=True):
+    if os.path.exists(path) is False:
+        prep_db(path)
         return
-    stat = os.stat(local)
-    fileage = datetime.fromtimestamp(stat.st_mtime)
-    now = datetime.now()
-    delta = now-fileage
-    if delta.days >= 5:
-        os.remove(local)
-        prep_db(local)
-        return
+    if update:
+        stat = os.stat(path)
+        fileage = datetime.fromtimestamp(stat.st_mtime)
+        now = datetime.now()
+        delta = now-fileage
+        if delta.days >= 5:
+            os.remove(path)
+            prep_db(path)
+            return
     return
 
-def use_local_betabarrel():
-    local = os.environ['HOME']+'/db/betabarrel'
-    if os.path.exists(local) is False:
-        prep_bb(local)
+def use_local_betabarrel(path, update=True):
+    if os.path.exists(path) is False:
+        prep_bb(path)
         return
-    stat = os.stat(local)
-    fileage = datetime.fromtimestamp(stat.st_mtime)
-    now = datetime.now()
-    delta = now-fileage
-    if delta.days >= 5:
-        os.remove(local)
-        prep_db(local)
-        return
+    if update:
+        stat = os.stat(path)
+        fileage = datetime.fromtimestamp(stat.st_mtime)
+        now = datetime.now()
+        delta = now-fileage
+        if delta.days >= 5:
+            os.remove(path)
+            prep_db(path)
+            return
     return
 
 class Names:
