@@ -13,13 +13,15 @@ import tempfile,re
 from numpy import sqrt,average
 
 def ParseDefline(defline,blast_title=False):
+    # gnl|BL_ORD_ID|7323 gnl|TC-DB|O84072|3.A.1.15.12 Probable metal transport system membrane protein CT_069 OS=Chlamydia trachomatis (strain D/UW-3/Cx) GN=CT_069 PE=3 SV=1
     if blast_title:
         line= defline.split(" ")
         defline=" ".join(line[1:])
     defline = re.sub('(\w)#','\\1 #',defline)
     defline = re.sub('>','',defline)
+    print("def", defline)
     sequence = ">%s\nXXX" %(defline)
-    fasta = tempfile.NamedTemporaryFile()
+    fasta = tempfile.NamedTemporaryFile(mode="w")
     fasta.write(sequence)
     fasta.flush()
     fasta.seek(0)
@@ -79,6 +81,6 @@ class GGSearchCommandline:
     def __call__(self):
         mycmd = '%s -s BL62 -m 8 -w 80 -f -8 -g -2 -b=3 -3 -k 500 %s %s'%(self.binary,self.subject,self.target)
         out = os.system(mycmd)
-        print out
+        print (out)
 
 

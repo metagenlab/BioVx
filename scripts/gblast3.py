@@ -4,8 +4,8 @@ from Bio.Blast import NCBIXML
 from Bio import SeqIO
 from ProjectBio import ParseDefline, nr_dict, ParseTC
 from Bio.Blast.Applications import NcbiblastpCommandline
-from urllib import quote as urlencode
-from urllib2 import urlopen
+import urllib.parse
+from urllib.request import urlopen
 import hmmtop,shutil
 from math import ceil
 import sys,os,pickle
@@ -21,20 +21,23 @@ import matplotlib.pyplot as plt
 import pylab,re,tempfile
 rsrc = resource.RLIMIT_DATA
 soft, hard = resource.getrlimit(rsrc)
-resource.setrlimit(rsrc, (1073741824, hard)) #limit to one gig, omg..
+#resource.setrlimit(rsrc, (1073741824, hard)) #limit to one gig, omg..
 
 class Tools:
 
     def __init__(self,
                  db_path=False,
-                 update_db=True):
+                 update_db=True,
+                 family_abbreviations=None,
+                 substrates=None):
         
         if not db_path:
             self.tcdb = os.path.join(os.environ['HOME'], '/db/tcdb')
             self.betabarrel = os.path.join(os.environ['HOME'], '/db/betabarrel')
         else:
-            self.tcdb = os.path.join(db_path, 'tcdb')
-            self.betabarrel = os.path.join(db_path, 'betabarrel')
+            self.tcdb = os.path.join(db_path, 'tcdb.faa')
+            self.betabarrel = os.path.join(db_path, 'betabarrel.faa')
+            print(self.tcdb)
         self.update = update_db
         self.query = False
         self.indir = False
@@ -60,8 +63,8 @@ class Tools:
         self.esort = False
         self.alabel = 'Query'
         self.blabel = 'TCDB-Hit'
-        self.names  = tcdb.Names()
-        self.loadSubstrates()
+        self.names  = tcdb.Names(family_abbreviations)
+        self.loadSubstrates(substrates)
 
         #Sequence dictionaries
         self.queries = {}
@@ -82,7 +85,7 @@ class Tools:
             self.prep_orthologs()
         queries = SeqIO.parse(open(self.query),'fasta')
         for query in queries:
-            query_file = tempfile.NamedTemporaryFile()
+            query_file = tempfile.NamedTemporaryFile(mode="w", encoding="utf-8")
             SeqIO.write(query,query_file,'fasta')
             query_file.flush()
             blast_out = "'"+self.indir+'/xml/'+query.id+".xml"+"'"
@@ -98,7 +101,7 @@ class Tools:
                 comp_based_stats='0'
             )
             blastp()
-            print "Blasted :: %s" %query.id
+            print ("Blasted :: %s" %query.id)
 
 
     def prep_orthologs(self):
@@ -132,63 +135,68 @@ class Tools:
     def load_good(self):
         db = self.indir+"/goodresults.db"
         if os.path.exists(db) and self.debug:
-            self.goodresults = pickle.load(open(db,'r'))
+            self.goodresults = pickle.load(open(db,'rb'))
             return
         xml = os.listdir(self.indir+"/xml")
         rez = []
         for res in xml:
             if os.path.exists(self.indir+'/xml/'+res) is False:
                 continue
-            try:
-                for blast in NCBIXML.parse(open(self.indir+'/xml/'+res)):
-                    query =  blast.query
-                    try:
-                        descriptions = [i for i in blast.descriptions]
-                        alignments = [i for i in blast.alignments]
-                        results = zip(descriptions,alignments)
-                        results.sort(key=lambda x:x[0].e,reverse=False)
-                        record = results[0] # Contains top description and top alignment object in tuple.
-                        hsps = [i for i in record[1].hsps]
-                        hsps.sort(key=lambda x:x.expect)
-                        hsp = hsps[0]
+            print("ine res", res)
+            for blast in NCBIXML.parse(open(self.indir+'/xml/'+res)):
+                query =  blast.query
+
+                descriptions = [i for i in blast.descriptions]
+                alignments = [i for i in blast.alignments]
+                #results = zip(descriptions,alignments)
+                results = sorted(zip(descriptions,alignments), key=lambda x:x[0].e,reverse=False)
+                if len(results) == 0:
+                    print("No significant hits, skipping")
+                    continue
+                else:
+                    print(len(results), "hits!")
+                #results.sort(key=lambda x:x[0].e,reverse=False)
+                record = results[0] # Contains top description and top alignment object in tuple.
+                hsps = [i for i in record[1].hsps]
+                hsps.sort(key=lambda x:x.expect)
+                hsp = hsps[0]
 
 
-                        if not blast.query_length:
-                                print('No Query Length')        
-                                print(vars(blast))
+                if not blast.query_length:
+                        print('No Query Length')        
+                        print(vars(blast))
 
-                        if not record[1].length:
+                if not record[1].length:
 
-                                print('No hit length')
-                                print(vars(record[1]))
+                        print('No hit length')
+                        print(vars(record[1]))
 
-                        q_len = blast.query_length
-                        h_len = record[1].length
+                q_len = blast.query_length
+                h_len = record[1].length
 
-                        qcov = float('%.1f'%(((hsp.query_end-hsp.query_start)/float(q_len))*100))
-                        hcov = float('%.1f'%(((hsp.sbjct_end-hsp.sbjct_start)/float(h_len))*100))
+                qcov = float('%.1f'%(((hsp.query_end-hsp.query_start)/float(q_len))*100))
+                hcov = float('%.1f'%(((hsp.sbjct_end-hsp.sbjct_start)/float(h_len))*100))
 
-                        if qcov >= 100:
+                if qcov >= 100:
+        
+                        qcov = 100.0
                 
-                                qcov = 100.0
-                        
-                        if hcov >= 100:
+                if hcov >= 100:
 
-                                hcov = 100.0
+                        hcov = 100.0
 
-                        
-                        if record[0].e > self.expect or len(hsp.match) < self.minlen:
-                                continue
-                        
+                
+                if record[0].e > self.expect or len(hsp.match) < self.minlen:
+                        continue
+                
 
-                        if qcov >= self.mincov or hcov >= self.mincov:
+                if qcov >= self.mincov or hcov >= self.mincov:
+                        print("GOOD", (query,record,hsp,q_len,h_len,qcov,hcov))
+                        rez.append((query,record,hsp,q_len,h_len,qcov,hcov)) # (genome ID, hit record <e,title>, hit.hsp)
 
-                                rez.append((query,record,hsp,q_len,h_len,qcov,hcov)) # (genome ID, hit record <e,title>, hit.hsp)
-                    except:
-                        pass
-            except:
-                continue
+
         self.goodresults = rez
+        print("rez", rez)
         pickle.dump(self.goodresults,open(db,'wb'))
         return
 
@@ -203,9 +211,12 @@ class Tools:
         done = dict()
         for query,hit,hsp,q_len,h_len,qcov,hcov in self.goodresults:
             hit = hit[0]
-            query=ParseDefline(query).id
+            
+            query=query.split(" ")[0]
+            print("query", query)
             myquery.append(self.queries[str(query)])
-            subject = ParseDefline(hit.title,True).id
+            subject = hit.title.split(" ")[1]
+            print("subj", subject)
             if subject not in done.keys():
                 done[subject] = 1
                 try:
@@ -213,19 +224,19 @@ class Tools:
                 except:
                     (family,tcid,acc) = ParseTC(hit.title)
                     #print tcid,acc
-                    print ParseDefline(hit.title,True).id
+                    print (ParseDefline(hit.title,True).id)
                     #print hit.title
                     quit()
 
-        query_file=open(self.indir+"/myqueries.faa",'wb')
-        tcdb_file=open(self.indir+"/mytcdb.faa",'wb')
+        query_file=open(self.indir+"/myqueries.faa",'w')
+        tcdb_file=open(self.indir+"/mytcdb.faa",'w')
         SeqIO.write(myquery,query_file,'fasta')
         SeqIO.write(mytcdb,tcdb_file,'fasta')
 
     def hmmtop(self):
         db = self.indir+'/hmmtop.db'
         if os.path.exists(db) and self.debug:
-            self.tms = pickle.load(open(db,'r'))
+            self.tms = pickle.load(open(db,'rb'))
             return
         ht = hmmtop.tools()
         ht.add_library('queries',self.indir+"/myqueries.faa") # Genome
@@ -237,10 +248,12 @@ class Tools:
 
     def calculate_tms_scores(self):
         for genome,tcdb,hsp,q_len,h_len,qcov,hcov in self.goodresults:
-            genome=ParseDefline(genome).id
+            print("genome", genome)
+            genome=genome.split(" ")[0]
             tcdb=tcdb[0]
             delta  = hsp.sbjct_start-hsp.query_start
-            tcdbid = ParseDefline(tcdb.title,True).id
+            print(tcdb.title)
+            tcdbid = tcdb.title.split(" ")[1]
             try:
                 genome_tms = self.tms['queries'][genome].values()
                 tcdb_tms = self.tms['tcdb'][tcdbid].values()
@@ -285,7 +298,8 @@ class Tools:
     def tcsort(self,title):
         if self.ortho is not False:
             return 1
-        title=ParseDefline(title,True).description
+        print(title)
+        title=" ".join(title.split(" ")[1:])
         (family,tc,acc) = ParseTC(title)
         tc = tc.split('.')
         return ( int(tc[0]), str(tc[1]), int(tc[2]), int(tc[3]), int(tc[4]) )
@@ -297,8 +311,9 @@ class Tools:
             os.mkdir(self.indir+"/img")
         except:
             pass
-        genome=ParseDefline(genome).id
-        tid = ParseDefline(tcdb.title,True).id
+        print("genome", genome)
+        genome=genome.split(" ")[0]
+        tid = tcdb.title.split(" ")[1]
         if os.path.exists(self.indir+"/img/"+genome+".png") is False:
 
             try:
@@ -306,19 +321,19 @@ class Tools:
                 tan = self.tcdbhmg(self.mytcdb[tid],hsp.sbjct)
                 self.what(hsp.query,hsp.sbjct,self.indir+"/img/"+genome+".png",[san,tan])
             except:
-                print hsp.query
-                print hsp.sbjct
-                print genome
-                print 'error, quit'
+                print (hsp.query)
+                print (hsp.sbjct)
+                print (genome)
+                print ('error, quit')
                 quit()
 
-        (family,tcid,acc) = ParseTC(ParseDefline(tcdb.title,True).description)
+        (family,tcid,acc) = ParseTC(" ".join(tcdb.title.split(" ")[1:]))
         try:
             query_tms = len(self.tms['queries'][genome])
         except:
             query_tms = 0
         try:
-            hit_tms = len(self.tms['tcdb'][ParseDefline(tcdb.title,True).id])
+            hit_tms = len(self.tms['tcdb'][tcdb.title.split(" ")[1]])
         except:
             hit_tms = 0
         self.globalcount += 1
@@ -417,7 +432,7 @@ class Tools:
         <tr><td><img src='img/%s_hydro.png'></td> <td><img src='img/%s-%s_hydro.png'></td></tr><br>
         <tr><th><br> Pairwise Alignment-Hydropathy Plot:<br></th></tr>
         <tr><td colspan="2" style="text-align: center;"><img src='img/%s.png'></td></tr></table><br>%s </p> </div>\n''' %(genome,genome,genome,acc,tcid,tcdb.title,\
-        len(hsp.match),tcdb.e,query_tms,hit_tms,ol,substrate,str(hsp),genome,acc,genome,urlencode(genome),mycdd)
+        len(hsp.match),tcdb.e,query_tms,hit_tms,ol,substrate,str(hsp),genome,acc,genome,urllib.parse.quote(genome, safe=''),mycdd)
         #self.data.append(content)
         return htmlrow,content,txtrow
 
@@ -426,9 +441,9 @@ class Tools:
         bestresults.extend(self.notmsresults)
         
         #create and open the necessary files for results (VI)
-        html_results = open(self.indir+'/results.html','wb')
-        content = open(self.indir+'/content.html','wb')
-        tsv_results = open(self.indir+'/results.tsv', 'wb')
+        html_results = open(self.indir+'/results.html','w')
+        content = open(self.indir+'/content.html','w')
+        tsv_results = open(self.indir+'/results.tsv', 'w')
         
         '''
             
@@ -468,25 +483,29 @@ class Tools:
             content.write(data)
             tsv_results.write(txt)
             
-            print "Generated Results for :: %s" %ParseDefline(res[0]).id
+            print ("Generated Results for :: %s" % res[0].split(" ")[0])
         
         #end tags for the .html files
         html_results.write("</table></html>")
         content.write("</html>")
 
-    def loadSubstrates(self):
+    def loadSubstrates(self, substrates=None):
 
         print('Loading Substrates')
 
-        substrateData = urlopen('http://tcdb.org/cgi-bin/projectv/getSubstrates.py')
+        #substrateData = urlopen('http://tcdb.org/cgi-bin/projectv/getSubstrates.py')
+        if not substrates:
+            substrateData = urlopen('https://tcdb.org/cgi-bin/substrates/getSubstrates.py')
+        else:
+            substrateData = open(substrates, "r")
 
-
-        for line in substrateData:
-
+        for n,line in enumerate(substrateData):
             data = line.replace('\n','').split('\t')
-            #print(data)
-            self.substrates[data[0]] = data[1].replace('|',', ')
+            tcdb_id = data[0]
+            substr = data[1]
+            substr_edit = substr.replace('|',', ')
 
+            self.substrates[tcdb_id] = substr_edit
 
         return
                          
@@ -519,9 +538,9 @@ class Tools:
         #Query Hydropathy
         if not os.path.exists(queryPath):
 
-            query=ParseDefline(genome).id
+            query=genome.split(" ")[0]
             querySeq = self.queries[str(query)].seq
-            query = 'quod.py {} -o {} -c blue -w {}-{} -l {}'.format(querySeq,genome+'_hydro',hsp.query_start,hsp.query_end,genome) + quod
+            query = '{}/quod.py {} -o {} -c blue -w {}-{} -l {}'.format("/".join(__file__.split("/")[0:-1]), querySeq,genome+'_hydro',hsp.query_start,hsp.query_end,genome) + quod
 
             #os.system(query)
             subprocess.call(query.split())
@@ -529,9 +548,9 @@ class Tools:
         #Hit Hydropathy
         if not os.path.exists(hitPath):
         
-            hitID = ParseDefline(hit.title,True).id
+            hitID = hit.title.split(" ")[1]
             hitSeq = self.tcdbHits[str(hitID)].seq
-            hit = 'quod.py {} -o {} -c red -w {}-{} -l {}'.format(hitSeq, acc+'-'+genome+'_hydro',hsp.sbjct_start,hsp.sbjct_end,acc) + quod
+            hit = '{}/quod.py {} -o {} -c red -w {}-{} -l {}'.format("/".join(__file__.split("/")[0:-1]), hitSeq, acc+'-'+genome+'_hydro',hsp.sbjct_start,hsp.sbjct_end,acc) + quod
 
             #os.system(hit)
             subprocess.call(hit.split())
@@ -689,7 +708,7 @@ if __name__=="__main__":
                     type='str',
                     dest='db_path',
                     default=False,
-                    help="Path to save TCDB database [$HOME/db/]"
+                    help="Path to save TCDB database [$HOME/db]"
     )
     opts.add_option('--check_update',
                     action='store_true',
@@ -697,8 +716,18 @@ if __name__=="__main__":
                     default=False,
                     help="Update database if more than 5 days old  [False]"
     )
-
-
+    opts.add_option('--family_abbreviations',
+                    type='str',
+                    dest='family_abbreviations',
+                    default=False,
+                    help="Path to family_abbreviations.tsv"
+    )
+    opts.add_option('--substrates',
+                    type='str',
+                    dest='substrates',
+                    default=False,
+                    help="Path to substrates.tsv"
+    )
     '''    
     opts.add_option('--betabarrel',
                     action='store_true',
@@ -734,7 +763,9 @@ if __name__=="__main__":
     (cli,args)=opts.parse_args()
     if cli.input is not None and cli.output is not None:
         GB = Tools(db_path=cli.db_path,
-                   update_db=cli.check_update)
+                   update_db=cli.check_update,
+                   family_abbreviations=cli.family_abbreviations,
+                   substrates=cli.substrates)
         GB.ortho  = False
         GB.indir  = cli.output
         GB.cdd_on = False
@@ -745,15 +776,15 @@ if __name__=="__main__":
         GB.mincov = cli.mincov
         GB.esort=cli.esort
         GB.blast_all()
-        print "Loading BLAST results"
+        print ("Loading BLAST results")
         GB.load_good()
-        print "Writing FASTAS"
+        print ("Writing FASTAS")
         GB.write_fastas()
-        print "Running HMMTOP"
+        print ("Running HMMTOP")
         GB.hmmtop()
-        print "Calculating TMS Overlap"
+        print ("Calculating TMS Overlap")
         GB.calculate_tms_scores()
-        print "Writing Results"
+        print ("Writing Results")
         GB.write_results()
     else:
         opts.print_help()

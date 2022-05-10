@@ -105,8 +105,8 @@ if __name__=='__main__':
     SeqIO.write(record,seqfile,'fasta')
     seqfile.seek(0)
     hmg(seqfile.name,gap)
-    print hmg.annotation
-    print seq
+    print (hmg.annotation)
+    print (seq)
     import Tkinter
 
 

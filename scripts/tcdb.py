@@ -7,7 +7,7 @@ import os
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-from Bio.Alphabet import IUPAC
+#from Bio.Alphabet import IUPAC
 #### the program does not seeem to use the mysql interface at all,
 #### so maybe should be out for now?
 #### I agree, all database functions are removed -V
@@ -94,10 +94,13 @@ def use_local_betabarrel(path, update=True):
 
 class Names:
     # This wrapper is for handling all nomenclature.
-    def __init__(self):
+    def __init__(self, family_abbreviations=None):
         # Load Abbreviations for families
         self.familyabr = {}
-        abr = urllib.urlopen('http://tcdb.org/cgi-bin/projectv/family_abbreviations.py').read().split("\n")
+        if not family_abbreviations:
+            abr = urllib.urlopen('https://tcdb.org/cgi-bin/projectv/family_abbreviations.py').read().split("\n")
+        else:
+            abr = open(family_abbreviations, "r").read().split("\n")
         for a in abr:
             try:
                 (family,symbol) = a.split('\t')

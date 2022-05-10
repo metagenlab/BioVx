@@ -28,7 +28,7 @@ class tools:
         self.pop=[]
 
     def add_library(self,name,path):
-        if self.libraries.has_key(name):
+        if name in self.libraries:
             raise IOError("This library already exists")
             return
         self.libraries[name] = path
@@ -37,7 +37,7 @@ class tools:
     def scan_file(self,fasta_file):
         hmtool = 'hmmtop' if 'hmmtop' not in os.environ else os.environ['hmmtop']
         cmd = "%s -if=%s -sf=FAS -is=pseudo -pi=spred" %(hmtool,fasta_file)
-        handle = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE)
+        handle = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE, encoding="UTF-8")
         results = handle.communicate()[0]
         tms = re.compile("(IN|OUT)\s+([0-9]+)\s+([^\n]+)?")
         ranges = re.compile("(\d+)\s+(\d+)")
@@ -53,7 +53,8 @@ class tools:
                 keys.setdefault(x[0]+1,[]).append(int(x[1].groups()[0]))
                 keys.setdefault(x[0]+1,[]).append(int(x[1].groups()[1]))
             #symbol used to be name.search(i).groups()[0].replace('>','')
-            symbols.append(ParseDefline(name.search(i).groups()[0]).id)
+            print(name.search(i).groups()[0])
+            symbols.append(name.search(i).groups()[0].split(" ")[0])
             res.append(keys)
         return res, symbols
 
@@ -67,7 +68,8 @@ class tools:
             if os.path.exists(debugfile):
                 self.results = pickle.load(open(debugfile,'r'))
                 return
-        for name,file in self.libraries.items():
+        for name,file in list(self.libraries.items()):
+            print(file)
             (result,symbols) = self.scan_file(file)
             keys = dict(zip(symbols,result))
             self.results[name] = keys
